@@ -1,0 +1,37 @@
+# openspec/config.yaml
+schema: spec-driven
+project: math-vs-math-game
+version: 1.0.0
+
+context: |
+  Project: Math vs Math (Mathematical Combat Simulator)
+  Format: Web Application (SPA)
+  Tech Stack: TypeScript (Strict), PixiJS v8 (WebGL/WebGPU), React 19, TailwindCSS, KaTeX, Web Audio API, Vite, Vitest
+  Architecture: Clean/Hexagonal Architecture + Headless Deterministic Game Loop + Decoupled PixiJS/React View + Command Queue Pattern
+  Game Modes: Phase 1: 1 Player vs. AI (Machine); Phase 2: 1v1 Real-time Multiplayer (WebRTC DataChannels)
+  Strict TDD Mode: enabled
+  Persistence Backend: openspec
+
+rules:
+  proposal:
+    - Include tradeoff analysis between quality attributes (Tier 1 vs Tier 2)
+    - Define clear boundaries between headless simulation kernel and rendering
+  specs:
+    - Structured as Epics, Features, and User Stories (HUs)
+    - Use Given/When/Then (Gherkin format) for acceptance criteria
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Preserve all math formulas, numeric HP, damage and cooldown values from specifications
+  design:
+    - Detail vector math, collision equations, and parametric curve raycasting
+    - Include state machines for entity lifecycles and match flow
+    - Provide TypeScript interface contracts for engine, entities, events, and inputs
+  tasks:
+    - Group by Epic and Feature using hierarchical numbering
+    - Formatted for Strict TDD Mode: Red (Test) -> Green (Implementation) -> Refactor
+  apply:
+    tdd: true
+    test_command: "npx vitest run"
+  verify:
+    test_command: "npx vitest run"
+    build_command: "npx vite build"
+    coverage_threshold: 85

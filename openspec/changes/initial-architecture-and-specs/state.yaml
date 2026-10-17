@@ -1,0 +1,38 @@
+# openspec/changes/initial-architecture-and-specs/state.yaml
+change: initial-architecture-and-specs
+status: in-progress
+created_at: "2026-10-17T12:10:00Z"
+current_phase: tasks
+
+phases:
+  explore:
+    status: completed
+    completed_at: "2026-10-17T12:12:00Z"
+    notes: "Analizadas especificaciones de los 9 niveles en behaevor-and-rules/ y grabaciones de referencia."
+  propose:
+    status: completed
+    completed_at: "2026-10-17T12:14:00Z"
+    artifact: PROPOSE-ARCHITECTURE.md
+    notes: "Propuesta de arquitectura con análisis de trade-offs, selección de stack y 14 niveles."
+  spec:
+    status: completed
+    completed_at: "2026-10-17T12:25:00Z"
+    artifact: openspec/specs/
+    notes: "Especificaciones estructuradas y fragmentadas en Epics, Features e Historias de Usuario (HUs)."
+  design:
+    status: completed
+    completed_at: "2026-10-17T12:26:00Z"
+    artifact: openspec/changes/initial-architecture-and-specs/design.md
+    notes: "Diseño técnico detallado de componentes, interfaces TypeScript, contratos y máquinas de estado."
+  tasks:
+    status: completed
+    completed_at: "2026-10-17T12:27:00Z"
+    artifact: openspec/changes/initial-architecture-and-specs/tasks.md
+    notes: "Plan de tareas atómicas y secuenciadas preparadas para ejecución con TDD Estricto."
+  apply:
+    status: pending
+    notes: "Próxima fase a ejecutar (implementación por lotes de código)."
+  verify:
+    status: pending
+  archive:
+    status: pending
