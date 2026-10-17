@@ -10,8 +10,8 @@ interface ArenaCanvasProps {
 
 export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [dragStart, setDragStart] = useState<Vector2D | null>(null);
-  const [dragCurrent, setDragCurrent] = useState<Vector2D | null>(null);
+  const dragStartRef = useRef<Vector2D | null>(null);
+  const dragCurrentRef = useRef<Vector2D | null>(null);
 
   // Convert game coordinates [-45..45, -75..75] to canvas pixels
   const toScreen = (gamePos: Vector2D, width: number, height: number): { x: number; y: number } => {
@@ -211,6 +211,8 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
       }
 
       // 6. Draw Player Drag Arrow (Aiming / Micro-impulse)
+      const dragStart = dragStartRef.current;
+      const dragCurrent = dragCurrentRef.current;
       if (dragStart && dragCurrent) {
         const start = toScreen(dragStart, width, height);
         const curr = toScreen(dragCurrent, width, height);
@@ -354,7 +356,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
 
     animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
-  }, [engine, dragStart, dragCurrent]);
+  }, [engine]);
 
   // Touch and Mouse handlers for user micro-impulse
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -365,12 +367,12 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
     const y = e.clientY - rect.top;
     const gamePos = toGame(x, y, canvas.width, canvas.height);
 
-    setDragStart(gamePos);
-    setDragCurrent(gamePos);
+    dragStartRef.current = gamePos;
+    dragCurrentRef.current = gamePos;
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!dragStart) return;
+    if (!dragStartRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -378,10 +380,12 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
     const y = e.clientY - rect.top;
     const gamePos = toGame(x, y, canvas.width, canvas.height);
 
-    setDragCurrent(gamePos);
+    dragCurrentRef.current = gamePos;
   };
 
   const handlePointerUp = () => {
+    const dragStart = dragStartRef.current;
+    const dragCurrent = dragCurrentRef.current;
     if (dragStart && dragCurrent) {
       const impulse = dragCurrent.sub(dragStart);
       if (impulse.magnitude() > 2) {
@@ -389,8 +393,8 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
         soundManager.playBounce();
       }
     }
-    setDragStart(null);
-    setDragCurrent(null);
+    dragStartRef.current = null;
+    dragCurrentRef.current = null;
   };
 
   return (

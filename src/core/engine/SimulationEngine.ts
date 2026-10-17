@@ -31,7 +31,7 @@ export class SimulationEngine {
   level: LevelDefinition;
   status: MatchStatus = 'COUNTDOWN';
   countdownRemaining = 3.0; // 3 seconds initial countdown
-  lastCountdownSecond = 3;
+  lastCountdownSecond = 4;
 
   leftEntity: BaseEntity;
   rightEntity: BaseEntity;

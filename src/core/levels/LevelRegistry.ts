@@ -13,10 +13,16 @@ export interface LevelDefinition {
 }
 
 export class LevelRegistry {
+  private static cachedLevels: LevelDefinition[] | null = null;
+
   static getLevels(): LevelDefinition[] {
+    if (this.cachedLevels) {
+      return this.cachedLevels;
+    }
+
     const defaultBounds = { minX: -45, maxX: 45, minY: -75, maxY: 75 };
 
-    return [
+    this.cachedLevels = [
       {
         id: 1,
         title: 'Operador Diferencial vs. Polinomio',
@@ -385,6 +391,8 @@ export class LevelRegistry {
         },
       },
     ];
+
+    return this.cachedLevels;
   }
 
   static getLevel(id: number): LevelDefinition | undefined {

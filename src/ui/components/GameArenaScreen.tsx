@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { SimulationEngine } from '../../core/engine/SimulationEngine';
 import { LevelRegistry } from '../../core/levels/LevelRegistry';
 import { GameLoop } from '../../core/engine/GameLoop';
@@ -22,7 +22,12 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   onBackToMenu,
   onSelectNextLevel,
 }) => {
-  const level = LevelRegistry.getLevel(levelId) || LevelRegistry.getLevels()[0];
+  const level = useMemo(
+    () => LevelRegistry.getLevel(levelId) || LevelRegistry.getLevels()[0],
+    [levelId]
+  );
+
+  const [restartKey, setRestartKey] = useState(0);
   const [engine, setEngine] = useState(() => new SimulationEngine(level));
   const [, setRenderTrigger] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
@@ -40,6 +45,9 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
     setEngine(newEngine);
     setMatchWinner(null);
     setCountdown(3);
+
+    // Initial countdown sound
+    soundManager.playCountdown(3);
 
     // Subscribe to events
     const unsubCountdown = globalEventBus.on('MATCH_COUNTDOWN', (payload) => {
@@ -61,13 +69,17 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
     });
 
     // Start game loop
+    let frameCounter = 0;
     const loop = new GameLoop(
       (dt) => {
         newEngine.update(dt);
       },
       () => {
-        // Force state sync for HUD
-        setRenderTrigger((r) => r + 1);
+        // Sync HUD every 3 frames (~20 Hz is smooth for text/numbers while keeping React fast)
+        frameCounter++;
+        if (frameCounter % 3 === 0) {
+          setRenderTrigger((r) => r + 1);
+        }
       }
     );
 
@@ -90,13 +102,10 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
       unsubStart();
       unsubOver();
     };
-  }, [levelId, level]);
+  }, [levelId, restartKey, level]);
 
   const handleRestart = () => {
-    const newEngine = new SimulationEngine(level);
-    setEngine(newEngine);
-    setMatchWinner(null);
-    setCountdown(3);
+    setRestartKey((k) => k + 1);
   };
 
   const handleNext = () => {
@@ -159,7 +168,10 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
         {/* Countdown Overlay (3, 2, 1) */}
         {countdown !== null && engine.status === 'COUNTDOWN' && (
           <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
-            <div className="text-7xl font-black font-mono text-cyan-400 drop-shadow-[0_0_20px_rgba(0,172,193,0.8)] animate-ping duration-700">
+            <div
+              key={countdown}
+              className="text-7xl font-black font-mono text-cyan-400 drop-shadow-[0_0_20px_rgba(0,172,193,0.8)] animate-pulse"
+            >
               {countdown}
             </div>
           </div>
