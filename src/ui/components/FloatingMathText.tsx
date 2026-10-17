@@ -3,15 +3,17 @@ import katex from 'katex';
 import { globalEventBus } from '../../core/engine/EventBus';
 import { soundManager } from '../../audio/WebAudioSynth';
 
-interface FormulaToast {
+interface Onomatopoeia {
   id: string;
   html: string;
   color: string;
+  xPercent: number;
+  yPercent: number;
   createdAt: number;
 }
 
 export const FloatingMathText: React.FC = () => {
-  const [toasts, setToasts] = useState<FormulaToast[]>([]);
+  const [items, setItems] = useState<Onomatopoeia[]>([]);
 
   useEffect(() => {
     const unsubscribe = globalEventBus.on('MATH_FORMULA', (payload) => {
@@ -22,26 +24,33 @@ export const FloatingMathText: React.FC = () => {
           displayMode: false,
           throwOnError: false,
         });
-      } catch (err) {
-        // Fallback to raw text if render fails
+      } catch {
         renderedHtml = payload.latex;
       }
 
-      const newToast: FormulaToast = {
-        id: `toast_${Date.now()}_${Math.random()}`,
+      // Convert game coordinates [-45..45, -75..75] to arena percentage
+      const rawX = payload.position ? payload.position.x : 0;
+      const rawY = payload.position ? payload.position.y : 0;
+      const xPercent = Math.max(12, Math.min(88, ((rawX + 45) / 90) * 100));
+      const yPercent = Math.max(12, Math.min(88, ((75 - rawY) / 150) * 100));
+
+      const newItem: Onomatopoeia = {
+        id: `ono_${Date.now()}_${Math.random()}`,
         html: renderedHtml,
         color: payload.color || '#00ACC1',
+        xPercent,
+        yPercent,
         createdAt: Date.now(),
       };
 
-      setToasts((prev) => [...prev.slice(-3), newToast]); // keep last 4 toasts
+      setItems((prev) => [...prev.slice(-4), newItem]); // keep last 5 active
     });
 
-    // Auto cleanup toasts older than 1.8 seconds
+    // Cleanup items older than 1.4 seconds
     const interval = setInterval(() => {
       const now = Date.now();
-      setToasts((prev) => prev.filter((t) => now - t.createdAt < 1800));
-    }, 200);
+      setItems((prev) => prev.filter((item) => now - item.createdAt < 1400));
+    }, 150);
 
     return () => {
       unsubscribe();
@@ -50,13 +59,19 @@ export const FloatingMathText: React.FC = () => {
   }, []);
 
   return (
-    <div className="absolute top-14 left-0 right-0 pointer-events-none flex flex-col items-center space-y-2 z-20">
-      {toasts.map((toast) => (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden z-30">
+      {items.map((item) => (
         <div
-          key={toast.id}
-          className="px-4 py-1.5 rounded-full shadow-2xl backdrop-blur-md bg-slate-900/90 border border-slate-700 animate-bounce text-sm font-semibold tracking-wide"
-          style={{ borderColor: toast.color, color: toast.color }}
-          dangerouslySetInnerHTML={{ __html: toast.html }}
+          key={item.id}
+          className="absolute select-none font-black italic tracking-wide text-2xl sm:text-3xl text-center whitespace-nowrap animate-onomatopoeia"
+          style={{
+            left: `${item.xPercent}%`,
+            top: `${item.yPercent}%`,
+            color: item.color,
+            textShadow: `0 0 16px ${item.color}, 0 0 32px ${item.color}, 0 2px 4px rgba(0,0,0,0.85)`,
+            filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.9))',
+          }}
+          dangerouslySetInnerHTML={{ __html: item.html }}
         />
       ))}
     </div>

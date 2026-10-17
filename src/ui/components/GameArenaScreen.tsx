@@ -2,17 +2,16 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { SimulationEngine } from '../../core/engine/SimulationEngine';
 import { LevelRegistry } from '../../core/levels/LevelRegistry';
 import { GameLoop } from '../../core/engine/GameLoop';
-import { vec2 } from '../../core/physics/Vector2D';
 import { globalEventBus } from '../../core/engine/EventBus';
 import { soundManager } from '../../audio/WebAudioSynth';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { LanguageSelector } from './LanguageSelector';
+import { useTheme } from '../../theme/ThemeContext';
 import { HeaderHUD } from './HeaderHUD';
 import { HPBar } from './HPBar';
 import { ArenaCanvas } from '../../render/ArenaCanvas';
 import { FloatingMathText } from './FloatingMathText';
 import { VictoryModal } from './VictoryModal';
-import { Volume2, VolumeX, RotateCcw, ArrowLeft, Zap } from 'lucide-react';
+import { Volume2, VolumeX, RotateCcw, ArrowLeft, Zap, Sun, Moon } from 'lucide-react';
 
 interface GameArenaScreenProps {
   levelId: number;
@@ -26,6 +25,9 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   onSelectNextLevel,
 }) => {
   const { t } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === 'dark';
+
   const level = useMemo(
     () => LevelRegistry.getLevel(levelId) || LevelRegistry.getLevels()[0],
     [levelId]
@@ -44,7 +46,6 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   } | null>(null);
 
   const loopRef = useRef<GameLoop | null>(null);
-  const keysPressed = useRef<{ [code: string]: boolean }>({});
 
   useEffect(() => {
     const newEngine = new SimulationEngine(level);
@@ -63,7 +64,7 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
 
     const unsubStart = globalEventBus.on('MATCH_START', () => {
       setCountdown(null);
-      soundManager.playCountdown(0);
+      soundManager.playStart();
     });
 
     const unsubOver = globalEventBus.on('MATCH_OVER', (payload) => {
@@ -74,28 +75,13 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
       });
     });
 
-    // Start game loop with continuous keyboard steering support
+    // Start fixed 60Hz game loop
     let frameCounter = 0;
     const loop = new GameLoop(
       (dt) => {
-        // Continuous player thrust via WASD or Arrow Keys
-        if (newEngine.status === 'COMBAT') {
-          let thrustX = 0;
-          let thrustY = 0;
-          if (keysPressed.current['KeyW'] || keysPressed.current['ArrowUp']) thrustY += 1;
-          if (keysPressed.current['KeyS'] || keysPressed.current['ArrowDown']) thrustY -= 1;
-          if (keysPressed.current['KeyA'] || keysPressed.current['ArrowLeft']) thrustX -= 1;
-          if (keysPressed.current['KeyD'] || keysPressed.current['ArrowRight']) thrustX += 1;
-
-          if (thrustX !== 0 || thrustY !== 0) {
-            newEngine.applyImpulse('LEFT', vec2(thrustX, thrustY), 28 * dt * 60);
-          }
-        }
-
         newEngine.update(dt);
       },
       () => {
-        // Sync HUD every 3 frames (~20 Hz is smooth while keeping React lightweight)
         frameCounter++;
         if (frameCounter % 3 === 0) {
           setRenderTrigger((r) => r + 1);
@@ -106,26 +92,19 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
     loopRef.current = loop;
     loop.start();
 
-    // Keyboard listeners
+    // Spacebar shortcut for skill
     const handleKeyDown = (e: KeyboardEvent) => {
-      keysPressed.current[e.code] = true;
       if (e.code === 'Space') {
         e.preventDefault();
         newEngine.triggerSkill('LEFT');
       }
     };
 
-    const handleKeyUp = (e: KeyboardEvent) => {
-      keysPressed.current[e.code] = false;
-    };
-
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
 
     return () => {
       loop.stop();
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
       unsubCountdown();
       unsubStart();
       unsubOver();
@@ -152,9 +131,13 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   const canUseSkill = engine.leftEntity.isReady() && engine.status === 'COMBAT';
 
   return (
-    <div className="w-full flex flex-col items-center justify-center p-2 relative max-w-md mx-auto">
+    <div className="w-full h-full max-h-[96vh] flex flex-col items-center justify-between p-1 sm:p-2 relative max-w-md mx-auto">
       {/* Top Controls Toolbar */}
-      <div className="w-full max-w-[420px] flex items-center justify-between px-2 py-1.5 mb-1 text-slate-400">
+      <div
+        className={`w-full max-w-[400px] flex items-center justify-between px-2 py-1 mb-1 transition-colors duration-200 ${
+          isDark ? 'text-slate-400' : 'text-slate-600'
+        }`}
+      >
         <button
           onClick={onBackToMenu}
           className="flex items-center space-x-1 text-xs font-mono hover:text-cyan-400 transition-colors p-1"
@@ -163,22 +146,39 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
           <span>{t.levelsList}</span>
         </button>
 
-        <div className="text-[11px] font-mono font-bold text-slate-300">
+        <div
+          className={`text-[11px] font-mono font-bold ${
+            isDark ? 'text-slate-200' : 'text-slate-800'
+          }`}
+        >
           {t.levelBadge} {level.id}: {levelInfo.subtitle}
         </div>
 
-        <div className="flex items-center space-x-1.5">
-          <LanguageSelector />
+        <div className="flex items-center space-x-2">
+          {/* Theme toggle button */}
+          <button
+            onClick={toggleTheme}
+            className={`p-1 rounded transition-colors ${
+              isDark ? 'hover:text-yellow-400' : 'hover:text-slate-900'
+            }`}
+            title={isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+          >
+            {isDark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
+          </button>
+
+          {/* Sound toggle */}
           <button
             onClick={toggleSound}
-            className="p-1 hover:text-slate-200 transition-colors"
+            className="p-1 hover:text-cyan-400 transition-colors"
             title="Mute / Unmute Sound"
           >
             {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-cyan-400" />}
           </button>
+
+          {/* Restart */}
           <button
             onClick={handleRestart}
-            className="p-1 hover:text-slate-200 transition-colors"
+            className="p-1 hover:text-cyan-400 transition-colors"
             title={t.retry}
           >
             <RotateCcw className="w-4 h-4" />
@@ -187,7 +187,11 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
       </div>
 
       {/* Main Game Stage Container */}
-      <div className="relative w-full max-w-[420px] rounded-xl overflow-hidden shadow-2xl border border-slate-800 bg-slate-950 flex flex-col">
+      <div
+        className={`relative w-full max-w-[400px] rounded-2xl overflow-hidden shadow-2xl border transition-colors duration-200 flex flex-col justify-between ${
+          isDark ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-300'
+        }`}
+      >
         {/* Header HUD */}
         <HeaderHUD
           leftEntity={engine.leftEntity}
@@ -195,22 +199,22 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
           levelId={levelId}
         />
 
-        {/* Floating KaTeX Formulas */}
+        {/* Floating Comic Math Onomatopoeia Popups */}
         <FloatingMathText />
 
         {/* Countdown Overlay (3, 2, 1) */}
         {countdown !== null && engine.status === 'COUNTDOWN' && (
-          <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
+          <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center bg-black/35 backdrop-blur-[2px]">
             <div
               key={countdown}
-              className="text-7xl font-black font-mono text-cyan-400 drop-shadow-[0_0_20px_rgba(0,172,193,0.8)] animate-pulse"
+              className="text-7xl font-black font-mono text-cyan-400 drop-shadow-[0_0_24px_rgba(0,172,193,0.9)] animate-pulse"
             >
               {countdown}
             </div>
           </div>
         )}
 
-        {/* Canvas Arena with Player Targeting Reticle */}
+        {/* Canvas Arena with Player Targeting Reticle and Click-to-Dash */}
         <ArenaCanvas engine={engine} playerBadgeText={t.playerBadge} />
 
         {/* HUD Lower Bars */}
@@ -221,18 +225,26 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
           activeSpheresCount={engine.subEntities.length + (engine.rightEntity.isDead ? 0 : 1)}
         />
 
-        {/* Skill Action Button & Controls Guide */}
-        <div className="p-2.5 bg-slate-900 border-t border-slate-800 flex items-center justify-between">
-          <div className="text-[10px] text-slate-400 font-mono leading-tight">
+        {/* Skill Action Button & Controls Guide (Guaranteed visible) */}
+        <div
+          className={`p-2 sm:p-2.5 border-t flex items-center justify-between transition-colors duration-200 ${
+            isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'
+          }`}
+        >
+          <div
+            className={`text-[10px] sm:text-[11px] font-mono leading-tight ${
+              isDark ? 'text-slate-400' : 'text-slate-600'
+            }`}
+          >
             💡 {t.controlsTip}
           </div>
 
           <button
             onClick={triggerPlayerSkill}
             disabled={!canUseSkill}
-            className={`px-3 py-1.5 rounded-lg font-mono text-xs font-bold flex items-center space-x-1.5 shadow-md transition-all active:scale-95 whitespace-nowrap ml-2 ${
+            className={`px-3 py-1.5 rounded-xl font-mono text-xs font-bold flex items-center space-x-1.5 shadow-md transition-all active:scale-95 whitespace-nowrap ml-2 ${
               canUseSkill
-                ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-cyan-500/20'
+                ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-cyan-500/25 animate-pulse cursor-pointer'
                 : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
             }`}
           >
@@ -262,3 +274,5 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
     </div>
   );
 };
+
+export default GameArenaScreen;

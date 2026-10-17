@@ -171,15 +171,32 @@ export class SimulationEngine {
   }
 
   private handleMathCollision(a: BaseEntity, b: BaseEntity): void {
-    // Determine which is left and which is right
-    const left = a.team === 'LEFT' ? a : b.team === 'LEFT' ? b : null;
-    const right = a.team === 'RIGHT' ? a : b.team === 'RIGHT' ? b : null;
+    // 1. Resolve elastic physics bounce first
+    ElasticSolver.resolveCollision(a, b);
+
+    const collisionPos = a.position.add(b.position).scale(0.5);
+    this.eventBus.emit('COLLISION', {
+      entityAId: a.id,
+      entityBId: b.id,
+      position: { x: collisionPos.x, y: collisionPos.y },
+    });
+
+    // 2. Identify Player (LEFT) and Enemy (RIGHT or SUB_ENTITY)
+    const isPlayerA = a.team === 'LEFT';
+    const isPlayerB = b.team === 'LEFT';
+
+    // Same team collision (e.g. sub-entity hitting sub-entity) -> elastic bounce only, no damage
+    if ((isPlayerA && isPlayerB) || (!isPlayerA && !isPlayerB)) {
+      return;
+    }
+
+    const player = isPlayerA ? a : b;
+    const enemy = isPlayerA ? b : a;
 
     // Handle Imaginary Unit phase intangible check
     const imagEntity = a.symbol === 'i' ? a : b.symbol === 'i' ? b : null;
     if (imagEntity && (imagEntity.currentPhaseIndex === 0 || imagEntity.currentPhaseIndex === 2)) {
-      // Phase i or -i: Intangible pierce! Deals -8 HP without physical bounce
-      const target = imagEntity === a ? b : a;
+      const target = imagEntity === player ? enemy : player;
       if (imagEntity.isReady()) {
         target.takeDamage(8);
         imagEntity.resetCooldown();
@@ -190,118 +207,203 @@ export class SimulationEngine {
           position: { x: target.position.x, y: target.position.y },
         });
         this.eventBus.emit('MATH_FORMULA', {
-          latex: 'i \\text{ 관통! (-8)}',
+          latex: 'i \\text{ pierce! (-8)}',
           position: { x: target.position.x, y: target.position.y },
+          color: '#D81B60',
         });
       }
-      return; // No bounce
+      return;
     }
 
-    // Default: Elastic bounce between circles
-    ElasticSolver.resolveCollision(a, b);
-
-    const collisionPos = a.position.add(b.position).scale(0.5);
-    this.eventBus.emit('COLLISION', {
-      entityAId: a.id,
-      entityBId: b.id,
-      position: { x: collisionPos.x, y: collisionPos.y },
-    });
-
-    // Level-specific collision rules
-    if (!left || !right) return;
-
-    // Level 1: d/dx vs Polynomial
-    if (this.level.id === 1) {
-      if ((a.id === 'ddx' && b.team !== 'LEFT') || (b.id === 'ddx' && a.team !== 'LEFT')) {
-        const polySphere = a.id === 'ddx' ? b : a;
-        this.applyDerivativeToPoly(polySphere);
+    // 3. Level-specific collision rules
+    // Level 1: d/dx vs Polynomial (x³, x², x, 1)
+    if (this.level.id === 1 || player.id === 'ddx' || player.symbol === 'd/dx') {
+      const polySymbols = ['x³', 'x²', 'x', '1'];
+      if (polySymbols.includes(enemy.symbol)) {
+        this.applyDerivativeToPoly(enemy, collisionPos);
+        // Player takes a light contact bump
+        player.takeDamage(1);
+        this.eventBus.emit('DAMAGE_DEALT', {
+          targetId: player.id,
+          amount: 1,
+          color: '#F4511E',
+          position: { x: player.position.x, y: player.position.y },
+        });
+        return;
       }
     }
 
-    // Level 2: d/dx vs e^x
-    if (this.level.id === 2) {
-      if ((a.id === 'ddx' && b.id === 'exp') || (b.id === 'ddx' && a.id === 'exp')) {
-        // e^x is immune
+    // Level 2: d/dx vs e^x (Eigenfunction Immunity + Reflected Burn)
+    if (this.level.id === 2 || (player.symbol === 'd/dx' && enemy.symbol === 'eˣ')) {
+      if (enemy.isImmuneToDerivative || enemy.symbol === 'eˣ') {
         this.eventBus.emit('MATH_FORMULA', {
-          latex: '\\frac{d}{dx}e^x = e^x \\text{ [면역!]}',
-          position: { x: right.position.x, y: right.position.y },
+          latex: '\\frac{d}{dx}e^x = e^x \\text{ [Immune!]}',
+          position: { x: enemy.position.x, y: enemy.position.y },
           color: '#D32F2F',
         });
-        // Burn operator d/dx
-        left.takeDamage(4);
-        left.addStatus({
+        player.takeDamage(4);
+        player.addStatus({
           type: 'BURN',
           durationRemaining: 4.0,
           tickDamage: 2,
           tickInterval: 1.0,
         });
         this.eventBus.emit('DAMAGE_DEALT', {
-          targetId: left.id,
+          targetId: player.id,
           amount: 4,
           color: '#D32F2F',
-          position: { x: left.position.x, y: left.position.y },
+          position: { x: player.position.x, y: player.position.y },
         });
+        return;
       }
+    }
+
+    // Level 3: Integral vs Sine / Cosine cycle
+    if (player.symbol === '∫' && (enemy.symbol === 'sin x' || enemy.symbol === 'cos x' || enemy.symbol === '-cos x' || enemy.symbol === '-sin x')) {
+      let nextSymbol = '-cos x';
+      let formulaLatex = '\\int \\sin x dx = -\\cos x';
+      if (enemy.symbol === 'sin x') {
+        nextSymbol = '-cos x';
+        formulaLatex = '\\int \\sin x dx = -\\cos x';
+      } else if (enemy.symbol === '-cos x') {
+        nextSymbol = '-sin x';
+        formulaLatex = '\\int -\\cos x dx = -\\sin x';
+      } else if (enemy.symbol === '-sin x') {
+        nextSymbol = 'cos x';
+        formulaLatex = '\\int -\\sin x dx = \\cos x';
+      } else if (enemy.symbol === 'cos x') {
+        nextSymbol = 'sin x';
+        formulaLatex = '\\int \\cos x dx = \\sin x';
+      }
+      enemy.symbol = nextSymbol;
+      enemy.takeDamage(14);
+      this.eventBus.emit('DAMAGE_DEALT', {
+        targetId: enemy.id,
+        amount: 14,
+        color: '#00ACC1',
+        position: { x: enemy.position.x, y: enemy.position.y },
+      });
+      this.eventBus.emit('MATH_FORMULA', {
+        latex: formulaLatex,
+        position: { x: collisionPos.x, y: collisionPos.y },
+        color: '#00ACC1',
+      });
+      return;
     }
 
     // Level 4: Partial derivative ∂/∂y vs e^x -> Instant One-Shot!
-    if (this.level.id === 4) {
-      if ((a.id === 'partial_y' && b.id === 'exp') || (b.id === 'partial_y' && a.id === 'exp')) {
-        right.takeDamage(80);
-        this.eventBus.emit('MATH_FORMULA', {
-          latex: '\\frac{\\partial}{\\partial y}(e^x) = 0 \\text{ [CRITICAL -80!]}',
-          position: { x: 0, y: 0 },
-          color: '#00C853',
-        });
-        this.eventBus.emit('DAMAGE_DEALT', {
-          targetId: right.id,
-          amount: 80,
-          isCrit: true,
-          color: '#00C853',
-          position: { x: right.position.x, y: right.position.y },
-        });
-      }
+    if (this.level.id === 4 || player.symbol === '∂/∂y') {
+      enemy.takeDamage(80);
+      this.eventBus.emit('MATH_FORMULA', {
+        latex: '\\frac{\\partial}{\\partial y}(e^x) = 0 \\text{ [CRITICAL!]}',
+        position: { x: collisionPos.x, y: collisionPos.y },
+        color: '#00C853',
+      });
+      this.eventBus.emit('DAMAGE_DEALT', {
+        targetId: enemy.id,
+        amount: 80,
+        isCrit: true,
+        color: '#00C853',
+        position: { x: enemy.position.x, y: enemy.position.y },
+      });
+      return;
     }
 
-    // Level 6: Integral ∫ vs e^x -> spawns constants Cn
-    if (this.level.id === 6) {
-      if ((a.id === 'integral' && b.id === 'exp') || (b.id === 'integral' && a.id === 'exp')) {
-        this.integralConstantCount++;
-        const cIndex = this.integralConstantCount;
-        this.eventBus.emit('MATH_FORMULA', {
-          latex: `\\int e^x dx = e^x + C_{${cIndex}}`,
-          position: { x: left.position.x, y: left.position.y },
-          color: '#F57C00',
-        });
-        // Spawn constant sphere
-        this.spawnConstantSphere(cIndex, left.position);
-      }
+    // Level 6: Integral ∫ vs e^x -> spawns constants Cn and deals damage
+    if (this.level.id === 6 || (player.symbol === '∫' && enemy.symbol === 'eˣ')) {
+      this.integralConstantCount++;
+      const cIndex = this.integralConstantCount;
+      enemy.takeDamage(10);
+      this.eventBus.emit('DAMAGE_DEALT', {
+        targetId: enemy.id,
+        amount: 10,
+        color: '#F57C00',
+        position: { x: enemy.position.x, y: enemy.position.y },
+      });
+      this.eventBus.emit('MATH_FORMULA', {
+        latex: `\\int e^x dx = e^x + C_{${cIndex}}`,
+        position: { x: collisionPos.x, y: collisionPos.y },
+        color: '#F57C00',
+      });
+      this.spawnConstantSphere(cIndex, collisionPos);
+      return;
     }
 
     // Level 8 & 9: Pi orbital digit contact
-    if (this.level.id === 8 || this.level.id === 9) {
-      const piEntity = a.symbol === 'π' ? a : b.symbol === 'π' ? b : null;
-      const target = piEntity === a ? b : a;
-      if (piEntity && target) {
-        const digit = this.piDigits[this.piCurrentDigitIndex % this.piDigits.length];
-        this.piCurrentDigitIndex++;
-        piEntity.activeDecimalIndex = this.piCurrentDigitIndex;
-        target.takeDamage(digit);
-        this.eventBus.emit('DAMAGE_DEALT', {
-          targetId: target.id,
-          amount: digit,
-          color: '#1976D2',
-          position: { x: target.position.x, y: target.position.y },
-        });
-        this.eventBus.emit('MATH_FORMULA', {
-          latex: `\\pi \\text{ Digit: -}${digit}`,
-          position: { x: target.position.x, y: target.position.y },
-        });
-      }
+    if (this.level.id === 8 || this.level.id === 9 || player.symbol === 'π' || enemy.symbol === 'π') {
+      const piEntity = player.symbol === 'π' ? player : enemy;
+      const target = piEntity === player ? enemy : player;
+      const digit = this.piDigits[this.piCurrentDigitIndex % this.piDigits.length];
+      this.piCurrentDigitIndex++;
+      piEntity.activeDecimalIndex = this.piCurrentDigitIndex;
+      target.takeDamage(digit);
+      this.eventBus.emit('DAMAGE_DEALT', {
+        targetId: target.id,
+        amount: digit,
+        color: '#1976D2',
+        position: { x: target.position.x, y: target.position.y },
+      });
+      this.eventBus.emit('MATH_FORMULA', {
+        latex: `\\pi \\text{ Digit: -}${digit}`,
+        position: { x: collisionPos.x, y: collisionPos.y },
+        color: '#1976D2',
+      });
+      return;
     }
+
+    // Level 10: Dirac Delta spike
+    if (player.symbol === 'δ(x)' || enemy.symbol === 'δ(x)') {
+      const deltaEntity = player.symbol === 'δ(x)' ? player : enemy;
+      const target = deltaEntity === player ? enemy : player;
+      target.takeDamage(25);
+      this.eventBus.emit('DAMAGE_DEALT', {
+        targetId: target.id,
+        amount: 25,
+        isCrit: true,
+        color: '#FFEA00',
+        position: { x: target.position.x, y: target.position.y },
+      });
+      this.eventBus.emit('MATH_FORMULA', {
+        latex: '\\int \\delta(x)f(x)dx = f(0)',
+        position: { x: collisionPos.x, y: collisionPos.y },
+        color: '#FFEA00',
+      });
+      return;
+    }
+
+    // 4. GENERAL OPPOSING COLLISION DAMAGE FOR ALL LEVELS (Solves issue 2 & 5)
+    // Calculate damage based on relative collision velocity
+    const relSpeed = a.velocity.sub(b.velocity).magnitude();
+    const baseDamage = Math.max(8, Math.min(22, Math.round(relSpeed * 0.35)));
+
+    // Enemy takes full contact damage
+    enemy.takeDamage(baseDamage);
+    this.eventBus.emit('DAMAGE_DEALT', {
+      targetId: enemy.id,
+      amount: baseDamage,
+      color: '#00ACC1',
+      position: { x: enemy.position.x, y: enemy.position.y },
+    });
+
+    // Player takes minor recoil damage (30% of base)
+    const recoilDamage = Math.max(2, Math.round(baseDamage * 0.3));
+    player.takeDamage(recoilDamage);
+    this.eventBus.emit('DAMAGE_DEALT', {
+      targetId: player.id,
+      amount: recoilDamage,
+      color: '#FF5722',
+      position: { x: player.position.x, y: player.position.y },
+    });
+
+    this.eventBus.emit('MATH_FORMULA', {
+      latex: `\\Delta p = ${baseDamage}`,
+      position: { x: collisionPos.x, y: collisionPos.y },
+      color: '#00ACC1',
+    });
   }
 
-  private applyDerivativeToPoly(sphere: BaseEntity): void {
+  private applyDerivativeToPoly(sphere: BaseEntity, collisionPos?: Vector2D): void {
+    const pos = collisionPos || sphere.position;
     if (this.polyGlobalHp) {
       this.polyGlobalHp.current = Math.max(0, this.polyGlobalHp.current - 1);
       this.rightEntity.hp = this.polyGlobalHp.current;
@@ -311,14 +413,14 @@ export class SimulationEngine {
       sphere.isDead = true;
       this.eventBus.emit('MATH_FORMULA', {
         latex: '\\frac{d}{dx}(x^3) = 3x^2',
-        position: { x: sphere.position.x, y: sphere.position.y },
+        position: { x: pos.x, y: pos.y },
         color: '#00ACC1',
       });
       // Spawn 3 spheres of x^2
       for (let k = 0; k < 3; k++) {
-        const offset = vec2((k - 1) * 6, (k - 1) * 4);
+        const offset = vec2((k - 1) * 8, (k - 1) * 6);
         const sub = new BaseEntity({
-          id: `poly_x2_${Date.now()}_${k}`,
+          id: `poly_x2_${Date.now()}_${k}_${Math.random()}`,
           name: 'x²',
           symbol: 'x²',
           team: 'SUB_ENTITY',
@@ -329,7 +431,7 @@ export class SimulationEngine {
           radius: 6,
           mass: 1.0,
           position: sphere.position.add(offset),
-          velocity: vec2(Math.sin(k * 2) * 20, Math.cos(k * 2) * 20),
+          velocity: vec2(Math.sin(k * 2 + 1) * 22, Math.cos(k * 2 + 1) * 22),
         });
         this.subEntities.push(sub);
       }
@@ -337,14 +439,14 @@ export class SimulationEngine {
       sphere.isDead = true;
       this.eventBus.emit('MATH_FORMULA', {
         latex: '\\frac{d}{dx}(x^2) = 2x',
-        position: { x: sphere.position.x, y: sphere.position.y },
+        position: { x: pos.x, y: pos.y },
         color: '#00ACC1',
       });
       // Spawn 2 spheres of x
       for (let k = 0; k < 2; k++) {
-        const offset = vec2((k === 0 ? -1 : 1) * 5, 0);
+        const offset = vec2((k === 0 ? -1 : 1) * 6, 0);
         const sub = new BaseEntity({
-          id: `poly_x_${Date.now()}_${k}`,
+          id: `poly_x_${Date.now()}_${k}_${Math.random()}`,
           name: 'x',
           symbol: 'x',
           team: 'SUB_ENTITY',
@@ -352,27 +454,28 @@ export class SimulationEngine {
           bgColor: '#FFF3E0',
           hp: 1,
           maxHp: 1,
-          radius: 4.5,
+          radius: 4.8,
           mass: 0.8,
           position: sphere.position.add(offset),
-          velocity: vec2((k === 0 ? -15 : 15), 15),
+          velocity: vec2((k === 0 ? -18 : 18), 18),
         });
         this.subEntities.push(sub);
       }
     } else if (sphere.symbol === 'x') {
       sphere.symbol = '1';
-      sphere.radius = 3.5;
+      sphere.name = '1';
+      sphere.radius = 3.6;
       sphere.color = '#FFD54F';
       this.eventBus.emit('MATH_FORMULA', {
         latex: '\\frac{d}{dx}(x) = 1',
-        position: { x: sphere.position.x, y: sphere.position.y },
+        position: { x: pos.x, y: pos.y },
         color: '#00ACC1',
       });
     } else if (sphere.symbol === '1') {
       sphere.isDead = true;
       this.eventBus.emit('MATH_FORMULA', {
         latex: '\\frac{d}{dx}(1) = 0',
-        position: { x: sphere.position.x, y: sphere.position.y },
+        position: { x: pos.x, y: pos.y },
         color: '#00ACC1',
       });
     }
@@ -432,9 +535,13 @@ export class SimulationEngine {
       } else {
         laser.durationRemaining -= dt;
 
-        // Damage detection against opposing entity
-        const target = laser.ownerId === this.leftEntity.id ? this.rightEntity : this.leftEntity;
-        if (!target.isDead) {
+        // Damage detection against opposing entities
+        const isPlayerLaser = laser.ownerId === this.leftEntity.id;
+        const targets = isPlayerLaser
+          ? [this.rightEntity, ...this.subEntities].filter((e) => !e.isDead)
+          : (!this.leftEntity.isDead ? [this.leftEntity] : []);
+
+        for (const target of targets) {
           let hit = false;
           if (laser.curveType === 'EXPONENTIAL') {
             hit = Curves.intersectsExponential(target.position, target.radius, laser.sourcePos, -45, 45);
@@ -465,17 +572,23 @@ export class SimulationEngine {
                 position: { x: owner.position.x, y: owner.position.y },
               });
               this.eventBus.emit('MATH_FORMULA', {
-                latex: `\\times(-1) \\text{ 반사! (-}${laser.damage})`,
+                latex: `\\times(-1) \\text{ Reflect! (-}${laser.damage})`,
                 position: { x: target.position.x, y: target.position.y },
+                color: '#D81B60',
               });
             } else {
-              target.takeDamage(laser.damage);
-              this.eventBus.emit('DAMAGE_DEALT', {
-                targetId: target.id,
-                amount: laser.damage,
-                color: '#FF7043',
-                position: { x: target.position.x, y: target.position.y },
-              });
+              // If player laser hits polynomial sphere in Level 1, trigger differentiation
+              if (isPlayerLaser && this.level.id === 1 && ['x³', 'x²', 'x', '1'].includes(target.symbol)) {
+                this.applyDerivativeToPoly(target, target.position);
+              } else {
+                target.takeDamage(laser.damage);
+                this.eventBus.emit('DAMAGE_DEALT', {
+                  targetId: target.id,
+                  amount: laser.damage,
+                  color: isPlayerLaser ? '#00ACC1' : '#FF7043',
+                  position: { x: target.position.x, y: target.position.y },
+                });
+              }
             }
           }
         }
@@ -510,7 +623,7 @@ export class SimulationEngine {
           if (orb.type === 'AMPLITUDE_X2') {
             entity.amplitude = Math.min(16, entity.amplitude * 2);
             this.eventBus.emit('MATH_FORMULA', {
-              latex: `a \\times 2 = ${entity.amplitude} \\text{ [진폭 강화!]}`,
+              latex: `a \\times 2 = ${entity.amplitude} \\text{ [Amp x2]}`,
               position: { x: entity.position.x, y: entity.position.y },
               color: '#FFD54F',
             });
@@ -518,7 +631,7 @@ export class SimulationEngine {
             entity.frequency = Math.min(16, entity.frequency * 2);
             entity.cooldownMax = Math.max(0.39, (2 * Math.PI) / entity.frequency);
             this.eventBus.emit('MATH_FORMULA', {
-              latex: `b \\times 2 = ${entity.frequency} \\text{ [주기 강화!]}`,
+              latex: `b \\times 2 = ${entity.frequency} \\text{ [Freq x2]}`,
               position: { x: entity.position.x, y: entity.position.y },
               color: '#FFD54F',
             });
@@ -537,16 +650,13 @@ export class SimulationEngine {
 
     // AI skill trigger heuristic
     if (this.level.id === 1) {
-      // Polynomial team triggers Graph Invocation
       this.triggerSkill('RIGHT');
     } else if (this.level.id === 2 || this.level.id === 4 || this.level.id === 5 || this.level.id === 6 || this.level.id === 8) {
-      // Exponential blade or Pi sector
       const dist = ai.position.distanceTo(this.leftEntity.position);
       if (dist < 40) {
         this.triggerSkill('RIGHT');
       }
     } else if (this.level.id === 7) {
-      // Cosine wave shot
       this.triggerSkill('RIGHT');
     } else {
       this.triggerSkill('RIGHT');
@@ -563,9 +673,125 @@ export class SimulationEngine {
     entity.resetCooldown();
     this.laserIdCounter++;
 
-    if (entity.symbol === 'x³' || entity.team === 'RIGHT' && this.level.id === 1) {
-      // Invocación de Gráfico (0.8s telegrafiado, luego láser)
-      this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: '그래프 소환!' });
+    // 1. Differential Operator d/dx (Player skill)
+    if (entity.symbol === 'd/dx') {
+      this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: "d/dx Tangent Slash!" });
+      this.activeLasers.push({
+        id: `laser_${this.laserIdCounter}`,
+        ownerId: entity.id,
+        sourcePos: entity.position.clone(),
+        curveType: 'LINEAR',
+        isTelegraph: false,
+        telegraphTime: 0,
+        durationRemaining: 0.8,
+        damage: 25,
+      });
+      this.eventBus.emit('MATH_FORMULA', {
+        latex: '\\text{Tangent Slash! } f\'(x)',
+        position: { x: entity.position.x, y: entity.position.y },
+        color: '#00ACC1',
+      });
+      return true;
+    }
+
+    // 2. Partial Derivative ∂/∂y
+    if (entity.symbol === '∂/∂y') {
+      this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: "∂/∂y Multivariable Slice!" });
+      this.activeLasers.push({
+        id: `laser_${this.laserIdCounter}`,
+        ownerId: entity.id,
+        sourcePos: entity.position.clone(),
+        curveType: 'HORIZONTAL',
+        isTelegraph: false,
+        telegraphTime: 0,
+        durationRemaining: 0.8,
+        damage: 30,
+      });
+      this.eventBus.emit('MATH_FORMULA', {
+        latex: '\\frac{\\partial}{\\partial y} \\text{ Slice!}',
+        position: { x: entity.position.x, y: entity.position.y },
+        color: '#00C853',
+      });
+      return true;
+    }
+
+    // 3. Integral Operator ∫
+    if (entity.symbol === '∫') {
+      this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: '∫ Riemann Wave!' });
+      this.activeLasers.push({
+        id: `laser_${this.laserIdCounter}`,
+        ownerId: entity.id,
+        sourcePos: entity.position.clone(),
+        curveType: 'LINEAR',
+        isTelegraph: false,
+        telegraphTime: 0,
+        durationRemaining: 0.6,
+        damage: 22,
+      });
+      this.integralConstantCount++;
+      this.spawnConstantSphere(this.integralConstantCount, entity.position);
+      this.eventBus.emit('MATH_FORMULA', {
+        latex: '\\int f(x)dx \\text{ Area Wave}',
+        position: { x: entity.position.x, y: entity.position.y },
+        color: '#F57C00',
+      });
+      return true;
+    }
+
+    // 4. Transcendental Pi π
+    if (entity.symbol === 'π') {
+      this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: 'π Sector Slice!' });
+      this.activeLasers.push({
+        id: `laser_${this.laserIdCounter}`,
+        ownerId: entity.id,
+        sourcePos: entity.position.clone(),
+        curveType: 'SECTOR',
+        isTelegraph: false,
+        telegraphTime: 0,
+        durationRemaining: 0.8,
+        damage: 22,
+        sectorSpan: entity.sectorAngle || Math.PI / 3,
+      });
+      entity.sectorAngle = (entity.sectorAngle || Math.PI / 3) >= Math.PI * 2 ? Math.PI / 6 : (entity.sectorAngle || Math.PI / 3) * 1.5;
+      return true;
+    }
+
+    // 5. Exponential e^x
+    if (entity.symbol === 'eˣ' || entity.symbol === 'eˣʸ') {
+      this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: 'Exponential Blade!' });
+      this.activeLasers.push({
+        id: `laser_${this.laserIdCounter}`,
+        ownerId: entity.id,
+        sourcePos: entity.position.clone(),
+        curveType: 'EXPONENTIAL',
+        isTelegraph: false,
+        telegraphTime: 0,
+        durationRemaining: 0.7,
+        damage: 18,
+      });
+      return true;
+    }
+
+    // 6. Sine / Cosine Wave
+    if (entity.symbol === 'sin x' || entity.symbol === 'cos x') {
+      const skillName = entity.symbol === 'sin x' ? 'Sine Wave!' : 'Cosine Wave!';
+      this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName });
+      this.activeLasers.push({
+        id: `laser_${this.laserIdCounter}`,
+        ownerId: entity.id,
+        sourcePos: entity.position.clone(),
+        curveType: entity.symbol === 'sin x' ? 'SINE' : 'COSINE',
+        isTelegraph: false,
+        telegraphTime: 0,
+        durationRemaining: 0.7,
+        damage: 25,
+      });
+      return true;
+    }
+
+    // 7. Polynomial Team Invocations
+    if (entity.symbol === 'x³' || (entity.team === 'RIGHT' && this.level.id === 1)) {
+      this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: 'Graph Invocation!' });
       this.activeLasers.push({
         id: `laser_${this.laserIdCounter}`,
         ownerId: entity.id,
@@ -576,7 +802,6 @@ export class SimulationEngine {
         durationRemaining: 1.2,
         damage: 23,
       });
-      // Also invoke lasers from sub-entities
       for (const sub of this.subEntities) {
         this.activeLasers.push({
           id: `laser_${this.laserIdCounter}_${sub.id}`,
@@ -592,78 +817,19 @@ export class SimulationEngine {
       return true;
     }
 
-    if (entity.symbol === 'eˣ' || entity.symbol === 'eˣʸ') {
-      // Cuchilla Exponencial
-      this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: '지수 칼날!' });
-      this.activeLasers.push({
-        id: `laser_${this.laserIdCounter}`,
-        ownerId: entity.id,
-        sourcePos: entity.position.clone(),
-        curveType: 'EXPONENTIAL',
-        isTelegraph: false,
-        telegraphTime: 0,
-        durationRemaining: 0.6,
-        damage: 13,
-      });
-      return true;
-    }
-
-    if (entity.symbol === 'π') {
-      // Corte de Sector circular (부채꼴 베기!)
-      this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: '부채꼴 베기!' });
-      this.activeLasers.push({
-        id: `laser_${this.laserIdCounter}`,
-        ownerId: entity.id,
-        sourcePos: entity.position.clone(),
-        curveType: 'SECTOR',
-        isTelegraph: false,
-        telegraphTime: 0,
-        durationRemaining: 0.8,
-        damage: 15,
-        sectorSpan: entity.sectorAngle,
-      });
-      // Expand sector angle up to 2pi
-      entity.sectorAngle = entity.sectorAngle >= Math.PI * 2 ? Math.PI / 6 : entity.sectorAngle * 2;
-      return true;
-    }
-
-    if (entity.symbol === 'sin x' || entity.symbol === 'cos x') {
-      // Wave shot
-      const skillName = entity.symbol === 'sin x' ? '사인파!' : '코사인파!';
-      this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName });
-      this.activeLasers.push({
-        id: `laser_${this.laserIdCounter}`,
-        ownerId: entity.id,
-        sourcePos: entity.position.clone(),
-        curveType: entity.symbol === 'sin x' ? 'SINE' : 'COSINE',
-        isTelegraph: false,
-        telegraphTime: 0,
-        durationRemaining: 0.7,
-        damage: 25,
-      });
-      return true;
-    }
-
-    if (entity.symbol === '∫') {
-      // Látigo integral
-      this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: '∫ 채찍!' });
-      this.activeLasers.push({
-        id: `laser_${this.laserIdCounter}`,
-        ownerId: entity.id,
-        sourcePos: entity.position.clone(),
-        curveType: 'LINEAR',
-        isTelegraph: false,
-        telegraphTime: 0,
-        durationRemaining: 0.5,
-        damage: 12,
-      });
-      // Spawn constant
-      this.integralConstantCount++;
-      this.spawnConstantSphere(this.integralConstantCount, entity.position);
-      return true;
-    }
-
-    return false;
+    // 8. General fallback skill
+    this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: `${entity.symbol} Pulse!` });
+    this.activeLasers.push({
+      id: `laser_${this.laserIdCounter}`,
+      ownerId: entity.id,
+      sourcePos: entity.position.clone(),
+      curveType: 'LINEAR',
+      isTelegraph: false,
+      telegraphTime: 0,
+      durationRemaining: 0.6,
+      damage: 20,
+    });
+    return true;
   }
 
   /**

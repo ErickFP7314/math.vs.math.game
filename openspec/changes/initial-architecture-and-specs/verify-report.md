@@ -2,23 +2,27 @@
 
 **Date**: 2026-10-17  
 **Status**: IN-PROGRESS / VERIFY PHASE  
-**Test Suite**: 25 Passing / 0 Failing (6 Test Suites)  
-**TypeScript / Production Build**: Clean Exit 0  
+**Test Suite**: 28 Passing / 0 Failing (6 Test Suites)  
+**TypeScript / Production Build**: Clean Exit 0 (KaTeX Web Fonts bundled locally)  
 
 ---
 
 ## 1. Executive Summary
 
-This verification report validates the implementation against the specifications in `openspec/specs/` and resolves the 5 user-reported issues from manual testing:
-1. **Level 1 Premature Victory Defect**: Resolved. In `SimulationEngine.ts`, match victory was previously prematurely evaluating `this.rightEntity.isDead` upon initial $x^3 \to 3x^2$ breakdown. Victory is now strictly gated by `polyGlobalHp.current <= 0` and living sub-entities.
-2. **Player Agency & UX Feedback**: Added multi-modal controls:
-   - Dynamic cyan targeting reticle with `"YOU"` label and projected trajectory ray.
-   - Click-to-impulse dash directly towards mouse cursor with visual shockwaves.
-   - Continuous keyboard steering via `WASD` / Arrow keys.
-   - Dedicated `[TRIGGER SKILL]` button & Spacebar mapping.
-3. **Multi-language Isolation (EN / ES / KO)**: Built a strict zero-leakage internationalization dictionary (`src/i18n/translations.ts`), context provider (`LanguageContext.tsx`), and UI toggle (`LanguageSelector.tsx`). All 10 levels, countdown labels, victory screens, and HUD metrics are isolated per locale.
-4. **GitHub Documentation**: Added a comprehensive, stylized English `README.md` to the repository root.
-5. **Testing & Verification Transition**: 25 automated tests pass in Vitest; production TypeScript build compiles with zero errors.
+This verification report validates the implementation against the specifications in `openspec/specs/` and comprehensively resolves all 12 user feedback items from manual testing:
+
+1. **Main Menu Scale & Custom Scrollbar**: Enlarged cards, fonts, and icons on `LevelSelectScreen.tsx` with a stylized cyan/slate scrollbar.
+2. **Opposing Collision Damage Across All Levels**: Fixed collision dispatcher so hostile entities deal real contact damage based on relative velocity, allowing matches to be won.
+3. **Touch & Click Steering Exclusivity**: Removed WASD and Arrow key steering to optimize touch controls for mobile and mouse-click aiming for desktop.
+4. **Successive Polynomial Breakdown ($x^2 \to 2x \to 1 \to 0$)**: Fixed sub-entity collision blocking bug in `SimulationEngine.ts`, enabling continuous multi-stage differentiation.
+5. **Continuous Score and Sub-division Updates**: Opposing collisions continuously update team HP pools, particle bursts, and sub-entity divisions.
+6. **Comic Onomatopoeia Popups**: Replaced notification toast cards with containerless, large, glowing mathematical popups directly at the collision coordinates (`@keyframes onomatopoeia-burst`).
+7. **Screen Zoom & Always-Visible Skill Button**: Adjusted arena container and canvas scaling (`max-h-[50vh]`) so the `[SKILL READY]` button is guaranteed to be visible on any screen without zooming or scrolling.
+8. **Functional Signature Skills**: Added instant, powerful skills for `d/dx` (Tangent Slash), `∂/∂y` (Multivariable Slice), `∫` (Riemann Wave), `π` (Sector Slice), `sin x` (Sine Wave), and fallback pulses for all entities.
+9. **Authentic LaTeX Math Typography**: Integrated local KaTeX font bundling (`KaTeX_Math`, `KaTeX_Main`) into Canvas rendering for italicized math variables and formulas.
+10. **Unified Light / Dark Mode**: Implemented `ThemeContext.tsx` with an instant toggle (☀️ / 🌙) adapting the arena canvas, grid, HUD, and menus together.
+11. **Thick Cartesian Grid Lines & Axes**: Increased sub-grid line width to 1.6px, primary axes to 3.2px, and added graduation ticks on X and Y axes.
+12. **Language Selector Placement**: Language selector is now exclusive to the main menu and removed from the active arena toolbar.
 
 ---
 
@@ -31,18 +35,18 @@ This verification report validates the implementation against the specifications
  ✓ tests/physics/ElasticSolver.test.ts (3 tests)
  ✓ tests/math/Curves.test.ts (5 tests)
  ✓ tests/engine/GameLoop.test.ts (2 tests)
- ✓ tests/engine/SimulationEngine.test.ts (5 tests)
+ ✓ tests/engine/SimulationEngine.test.ts (8 tests)
  ✓ tests/i18n/translations.test.ts (3 tests)
 
  Test Files  6 passed (6)
-      Tests  25 passed (25)
-   Duration  1.11s
+      Tests  28 passed (28)
+   Duration  531ms
 ```
 
 ### Detailed Verifications:
-- **`Vector2D.test.ts`**: Verifies vector addition, subtraction, scalar multiplication, dot product, magnitude, and safe normalization (avoiding division by zero).
+- **`Vector2D.test.ts`**: Verifies vector addition, subtraction, scalar multiplication, dot product, magnitude, and safe normalization.
 - **`ElasticSolver.test.ts`**: Verifies momentum conservation, restitution coefficient calculations, and separation of overlapping circular entities.
-- **`Curves.test.ts`**: Validates parametric curve evaluations for Cubic ($y=x^3$), Exponential ($y=e^x$), Sine ($y=\sin x$), and Sector spans, including raycast intersection detection against physical circles.
+- **`Curves.test.ts`**: Validates parametric curve evaluations for Cubic ($y=x^3$), Exponential ($y=e^x$), Sine ($y=\sin x$), and Sector spans.
 - **`GameLoop.test.ts`**: Verifies fixed 60Hz delta accumulator behavior and pause/resume logic.
 - **`SimulationEngine.test.ts`**:
   - Countdown sequence transitions to `COMBAT`.
@@ -50,7 +54,10 @@ This verification report validates the implementation against the specifications
   - Player directional steering impulse modifies velocity within maximum bounds.
   - Level 2 $e^x$ eigenfunction immunity and counter-burn effect.
   - Level 4 $\frac{\partial}{\partial y}$ multivariable dimension wipeout instant KO.
-- **`translations.test.ts`**: Ensures all 3 locales (`en`, `es`, `ko`) contain complete dictionary mappings for general UI, buttons, HUD, and descriptions for all 10 levels.
+  - **NEW**: Sub-entity successive breakdown ($x^2 \to 2x$).
+  - **NEW**: Player `d/dx` signature skill activation (Tangent Slash).
+  - **NEW**: General opposing collision damage in standard matches.
+- **`translations.test.ts`**: Ensures all 3 locales (`en`, `es`, `ko`) contain complete dictionary mappings.
 
 ---
 
@@ -61,34 +68,18 @@ This verification report validates the implementation against the specifications
 > tsc && vite build
 
 vite v5.4.21 building for production...
-✓ 1591 modules transformed.
-dist/index.html                   0.89 kB │ gzip:   0.56 kB
-dist/assets/index-BnAZj3lk.css   21.88 kB │ gzip:   4.37 kB
-dist/assets/index-BRdTMBek.js   469.14 kB │ gzip: 143.23 kB
-✓ built in 2.90s
+✓ 1592 modules transformed.
+dist/index.html                                         0.89 kB │ gzip:   0.56 kB
+dist/assets/KaTeX_Math-Italic-flOr_0UB.ttf             31.31 kB
+dist/assets/KaTeX_Main-Regular-ypZvNtVU.ttf            53.58 kB
+dist/assets/index-BW_9YlSO.css                         52.72 kB │ gzip:  12.90 kB
+dist/assets/index-Bqgn3bVd.js                         476.56 kB │ gzip: 144.72 kB
+✓ built in 2.00s
 ```
 
 ---
 
-## 4. User Story & Epic Audit Matrix
-
-| Epic | Feature | Specification Status | Verification Result |
-|---|---|---|---|
-| **EPIC-01: Engine & Physics** | F01: 2D Kinematics | PASS | Verified in `Vector2D.test.ts` & `ElasticSolver.test.ts` |
-| **EPIC-01: Engine & Physics** | F02: Fixed-Timestep Loop | PASS | Verified in `GameLoop.test.ts` |
-| **EPIC-01: Engine & Physics** | F03: Parametric Raycasting | PASS | Verified in `Curves.test.ts` |
-| **EPIC-02: Entities & Math** | F04: Differential Operator | PASS | Verified in `SimulationEngine.test.ts` |
-| **EPIC-02: Entities & Math** | F05: Eigenfunction $e^x$ | PASS | Verified in `SimulationEngine.test.ts` |
-| **EPIC-02: Entities & Math** | F06: Polynomial Degradation | PASS | Verified in Level 1 & `SimulationEngine.test.ts` |
-| **EPIC-02: Entities & Math** | F07: Partial Derivatives | PASS | Verified in `SimulationEngine.test.ts` |
-| **EPIC-03: Levels & Content** | F08-F14: Levels 1 to 10 | PASS | Registered in `LevelRegistry.ts` |
-| **EPIC-04: Audio & FX** | F15: Web Audio Synth | PASS | Procedural sound manager active |
-| **EPIC-05: UI & Localization**| F16: Multilingual UI | PASS | Verified in `translations.test.ts` & UI screens |
-| **EPIC-05: UI & Localization**| F17: Steering Agency & Reticle | PASS | Integrated into `ArenaCanvas.tsx` & `GameArenaScreen.tsx` |
-
----
-
-## 5. Next Steps
+## 4. Next Steps
 
 - Present verification results to the user.
-- Await user feedback or acceptance to trigger `/sdd-archive` and finalize the SDD cycle.
+- Await user approval to archive and conclude the SDD cycle.

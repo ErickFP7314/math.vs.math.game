@@ -1,6 +1,7 @@
 import React from 'react';
 import { BaseEntity } from '../../core/entities/BaseEntity';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface HeaderHUDProps {
   leftEntity: BaseEntity;
@@ -10,10 +11,16 @@ interface HeaderHUDProps {
 
 export const HeaderHUD: React.FC<HeaderHUDProps> = ({ leftEntity, rightEntity, levelId }) => {
   const { t } = useLanguage();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const levelInfo = t.levels[levelId] || t.levels[1];
 
   return (
-    <div className="w-full max-w-[420px] mx-auto flex items-center justify-between px-3 py-2 bg-slate-950/80 backdrop-blur border-b border-slate-800 rounded-t-lg select-none">
+    <div
+      className={`w-full max-w-[420px] mx-auto flex items-center justify-between px-3 py-2 border-b select-none transition-colors duration-200 ${
+        isDark ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-50 border-slate-200'
+      }`}
+    >
       {/* Left Avatar (Player) */}
       <div className="flex items-center space-x-2">
         <div
@@ -28,7 +35,7 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({ leftEntity, rightEntity, l
           {leftEntity.symbol}
         </div>
         <div className="flex flex-col">
-          <span className="text-xs font-bold font-mono text-slate-100">{levelInfo.leftName}</span>
+          <span className={`text-xs font-bold font-mono ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{levelInfo.leftName}</span>
           <span className="text-[10px] font-mono text-cyan-400 font-semibold">
             {levelInfo.leftLabel}
           </span>
@@ -56,7 +63,7 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({ leftEntity, rightEntity, l
           {rightEntity.symbol}
         </div>
         <div className="flex flex-col">
-          <span className="text-xs font-bold font-mono text-slate-100">{levelInfo.rightName}</span>
+          <span className={`text-xs font-bold font-mono ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{levelInfo.rightName}</span>
           <span className="text-[10px] font-mono text-orange-400 font-semibold">
             {levelInfo.rightLabel}
           </span>

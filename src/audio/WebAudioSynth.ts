@@ -48,6 +48,13 @@ export class WebAudioSynth {
   }
 
   /**
+   * High chime for match start
+   */
+  playStart(): void {
+    this.playCountdown(0);
+  }
+
+  /**
    * Sharp laser/cut sound
    */
   playLaser(): void {
