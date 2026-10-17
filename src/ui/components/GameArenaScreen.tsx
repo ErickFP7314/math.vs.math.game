@@ -2,8 +2,11 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { SimulationEngine } from '../../core/engine/SimulationEngine';
 import { LevelRegistry } from '../../core/levels/LevelRegistry';
 import { GameLoop } from '../../core/engine/GameLoop';
+import { vec2 } from '../../core/physics/Vector2D';
 import { globalEventBus } from '../../core/engine/EventBus';
 import { soundManager } from '../../audio/WebAudioSynth';
+import { useLanguage } from '../../i18n/LanguageContext';
+import { LanguageSelector } from './LanguageSelector';
 import { HeaderHUD } from './HeaderHUD';
 import { HPBar } from './HPBar';
 import { ArenaCanvas } from '../../render/ArenaCanvas';
@@ -22,10 +25,12 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   onBackToMenu,
   onSelectNextLevel,
 }) => {
+  const { t } = useLanguage();
   const level = useMemo(
     () => LevelRegistry.getLevel(levelId) || LevelRegistry.getLevels()[0],
     [levelId]
   );
+  const levelInfo = t.levels[levelId] || t.levels[1];
 
   const [restartKey, setRestartKey] = useState(0);
   const [engine, setEngine] = useState(() => new SimulationEngine(level));
@@ -39,6 +44,7 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   } | null>(null);
 
   const loopRef = useRef<GameLoop | null>(null);
+  const keysPressed = useRef<{ [code: string]: boolean }>({});
 
   useEffect(() => {
     const newEngine = new SimulationEngine(level);
@@ -68,14 +74,28 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
       });
     });
 
-    // Start game loop
+    // Start game loop with continuous keyboard steering support
     let frameCounter = 0;
     const loop = new GameLoop(
       (dt) => {
+        // Continuous player thrust via WASD or Arrow Keys
+        if (newEngine.status === 'COMBAT') {
+          let thrustX = 0;
+          let thrustY = 0;
+          if (keysPressed.current['KeyW'] || keysPressed.current['ArrowUp']) thrustY += 1;
+          if (keysPressed.current['KeyS'] || keysPressed.current['ArrowDown']) thrustY -= 1;
+          if (keysPressed.current['KeyA'] || keysPressed.current['ArrowLeft']) thrustX -= 1;
+          if (keysPressed.current['KeyD'] || keysPressed.current['ArrowRight']) thrustX += 1;
+
+          if (thrustX !== 0 || thrustY !== 0) {
+            newEngine.applyImpulse('LEFT', vec2(thrustX, thrustY), 28 * dt * 60);
+          }
+        }
+
         newEngine.update(dt);
       },
       () => {
-        // Sync HUD every 3 frames (~20 Hz is smooth for text/numbers while keeping React fast)
+        // Sync HUD every 3 frames (~20 Hz is smooth while keeping React lightweight)
         frameCounter++;
         if (frameCounter % 3 === 0) {
           setRenderTrigger((r) => r + 1);
@@ -86,18 +106,26 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
     loopRef.current = loop;
     loop.start();
 
-    // Spacebar listener for active skill
+    // Keyboard listeners
     const handleKeyDown = (e: KeyboardEvent) => {
+      keysPressed.current[e.code] = true;
       if (e.code === 'Space') {
         e.preventDefault();
         newEngine.triggerSkill('LEFT');
       }
     };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keysPressed.current[e.code] = false;
+    };
+
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
 
     return () => {
       loop.stop();
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
       unsubCountdown();
       unsubStart();
       unsubOver();
@@ -126,31 +154,32 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   return (
     <div className="w-full flex flex-col items-center justify-center p-2 relative max-w-md mx-auto">
       {/* Top Controls Toolbar */}
-      <div className="w-full max-w-[420px] flex items-center justify-between px-2 py-1 mb-1 text-slate-400">
+      <div className="w-full max-w-[420px] flex items-center justify-between px-2 py-1.5 mb-1 text-slate-400">
         <button
           onClick={onBackToMenu}
           className="flex items-center space-x-1 text-xs font-mono hover:text-cyan-400 transition-colors p-1"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Niveles</span>
+          <span>{t.levelsList}</span>
         </button>
 
         <div className="text-[11px] font-mono font-bold text-slate-300">
-          NIVEL {level.id}: {level.subtitle}
+          {t.levelBadge} {level.id}: {levelInfo.subtitle}
         </div>
 
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-1.5">
+          <LanguageSelector />
           <button
             onClick={toggleSound}
             className="p-1 hover:text-slate-200 transition-colors"
-            title="Silenciar / Activar Sonido"
+            title="Mute / Unmute Sound"
           >
             {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-cyan-400" />}
           </button>
           <button
             onClick={handleRestart}
             className="p-1 hover:text-slate-200 transition-colors"
-            title="Reiniciar Nivel"
+            title={t.retry}
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -160,7 +189,11 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
       {/* Main Game Stage Container */}
       <div className="relative w-full max-w-[420px] rounded-xl overflow-hidden shadow-2xl border border-slate-800 bg-slate-950 flex flex-col">
         {/* Header HUD */}
-        <HeaderHUD leftEntity={engine.leftEntity} rightEntity={engine.rightEntity} />
+        <HeaderHUD
+          leftEntity={engine.leftEntity}
+          rightEntity={engine.rightEntity}
+          levelId={levelId}
+        />
 
         {/* Floating KaTeX Formulas */}
         <FloatingMathText />
@@ -177,8 +210,8 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
           </div>
         )}
 
-        {/* Canvas Arena */}
-        <ArenaCanvas engine={engine} />
+        {/* Canvas Arena with Player Targeting Reticle */}
+        <ArenaCanvas engine={engine} playerBadgeText={t.playerBadge} />
 
         {/* HUD Lower Bars */}
         <HPBar
@@ -188,16 +221,16 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
           activeSpheresCount={engine.subEntities.length + (engine.rightEntity.isDead ? 0 : 1)}
         />
 
-        {/* Skill Action Button & Drag Tip */}
+        {/* Skill Action Button & Controls Guide */}
         <div className="p-2.5 bg-slate-900 border-t border-slate-800 flex items-center justify-between">
           <div className="text-[10px] text-slate-400 font-mono leading-tight">
-            💡 <span className="text-cyan-400">Arrastra</span> para desviar • <span className="text-cyan-400">Espacio</span> para habilidad
+            💡 {t.controlsTip}
           </div>
 
           <button
             onClick={triggerPlayerSkill}
             disabled={!canUseSkill}
-            className={`px-3 py-1.5 rounded-lg font-mono text-xs font-bold flex items-center space-x-1.5 shadow-md transition-all active:scale-95 ${
+            className={`px-3 py-1.5 rounded-lg font-mono text-xs font-bold flex items-center space-x-1.5 shadow-md transition-all active:scale-95 whitespace-nowrap ml-2 ${
               canUseSkill
                 ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-cyan-500/20'
                 : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
@@ -206,8 +239,8 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
             <Zap className="w-3.5 h-3.5 fill-current" />
             <span>
               {canUseSkill
-                ? '¡HABILIDAD!'
-                : `Recarga (${Math.ceil(engine.leftEntity.cooldownRemaining)}s)`}
+                ? t.skillReady
+                : `${t.recharging} (${Math.ceil(engine.leftEntity.cooldownRemaining)}s)`}
             </span>
           </button>
         </div>
@@ -217,7 +250,7 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
           <VictoryModal
             winner={matchWinner.winner}
             winnerSymbol={matchWinner.symbol}
-            winnerName={matchWinner.winner === 'LEFT' ? engine.leftEntity.name : engine.rightEntity.name}
+            winnerName={matchWinner.winner === 'LEFT' ? levelInfo.leftName : levelInfo.rightName}
             remainingHp={matchWinner.remainingHp}
             onRestart={handleRestart}
             onNextLevel={handleNext}

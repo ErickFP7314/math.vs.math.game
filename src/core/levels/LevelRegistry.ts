@@ -1,5 +1,5 @@
-import { vec2, Vector2D } from '../physics/Vector2D';
-import { BaseEntity, EntityConfig } from '../entities/BaseEntity';
+import { vec2 } from '../physics/Vector2D';
+import { EntityConfig } from '../entities/BaseEntity';
 
 export interface LevelDefinition {
   id: number;

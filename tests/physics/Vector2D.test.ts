@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Vector2D, vec2 } from '../../src/core/physics/Vector2D';
+import { vec2 } from '../../src/core/physics/Vector2D';
 
 describe('Vector2D', () => {
   it('creates vector with given coordinates', () => {

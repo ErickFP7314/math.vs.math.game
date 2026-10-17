@@ -531,7 +531,7 @@ export class SimulationEngine {
     }
   }
 
-  private updateAI(dt: number): void {
+  private updateAI(_dt: number): void {
     const ai = this.rightEntity;
     if (ai.isDead || !ai.isReady()) return;
 
@@ -684,14 +684,41 @@ export class SimulationEngine {
   }
 
   private checkMatchEnd(): void {
-    if (this.leftEntity.isDead && !this.rightEntity.isDead) {
+    // If the match has a global polynomial HP pool (e.g. Level 1)
+    if (this.polyGlobalHp) {
+      if (this.polyGlobalHp.current <= 0) {
+        this.status = 'VICTORY';
+        this.eventBus.emit('MATCH_OVER', {
+          winner: 'LEFT',
+          remainingHp: this.leftEntity.hp,
+          symbol: this.leftEntity.symbol,
+        });
+        return;
+      }
+      if (this.leftEntity.isDead) {
+        this.status = 'DEFEAT';
+        this.eventBus.emit('MATCH_OVER', {
+          winner: 'RIGHT',
+          remainingHp: this.polyGlobalHp.current,
+          symbol: 'x³',
+        });
+        return;
+      }
+      // Polynomial team still has HP in the pool and active spheres
+      return;
+    }
+
+    // Check living sub-entities on the right side
+    const livingRightSubEntities = this.subEntities.filter((e) => !e.isDead && e.team === 'SUB_ENTITY');
+
+    if (this.leftEntity.isDead && (!this.rightEntity.isDead || livingRightSubEntities.length > 0)) {
       this.status = 'DEFEAT';
       this.eventBus.emit('MATCH_OVER', {
         winner: 'RIGHT',
         remainingHp: this.rightEntity.hp,
         symbol: this.rightEntity.symbol,
       });
-    } else if (this.rightEntity.isDead && !this.leftEntity.isDead) {
+    } else if (this.rightEntity.isDead && livingRightSubEntities.length === 0 && !this.leftEntity.isDead) {
       this.status = 'VICTORY';
       this.eventBus.emit('MATCH_OVER', {
         winner: 'LEFT',

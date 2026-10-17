@@ -1,4 +1,4 @@
-import { Vector2D, vec2 } from '../physics/Vector2D';
+import { Vector2D } from '../physics/Vector2D';
 import { PhysicalCircle } from '../physics/ElasticSolver';
 
 export type EntityTeam = 'LEFT' | 'RIGHT' | 'SUB_ENTITY';

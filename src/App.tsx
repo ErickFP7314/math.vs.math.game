@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { LevelSelectScreen } from './ui/components/LevelSelectScreen';
 import { GameArenaScreen } from './ui/components/GameArenaScreen';
+import { LanguageProvider } from './i18n/LanguageContext';
 
-export const App: React.FC = () => {
+export const AppContent: React.FC = () => {
   const [selectedLevelId, setSelectedLevelId] = useState<number | null>(1); // Default to level 1 for instant play
 
   return (
@@ -17,6 +18,14 @@ export const App: React.FC = () => {
         />
       )}
     </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
   );
 };
 

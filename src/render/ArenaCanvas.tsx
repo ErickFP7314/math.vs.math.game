@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { SimulationEngine } from '../core/engine/SimulationEngine';
 import { BaseEntity } from '../core/entities/BaseEntity';
 import { Vector2D, vec2 } from '../core/physics/Vector2D';
@@ -6,12 +6,15 @@ import { soundManager } from '../audio/WebAudioSynth';
 
 interface ArenaCanvasProps {
   engine: SimulationEngine;
+  playerBadgeText?: string;
 }
 
-export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
+export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeText = 'YOU' }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dragStartRef = useRef<Vector2D | null>(null);
   const dragCurrentRef = useRef<Vector2D | null>(null);
+  const cursorGamePosRef = useRef<Vector2D | null>(null);
+  const shockwavesRef = useRef<{ x: number; y: number; radius: number; alpha: number }[]>([]);
 
   // Convert game coordinates [-45..45, -75..75] to canvas pixels
   const toScreen = (gamePos: Vector2D, width: number, height: number): { x: number; y: number } => {
@@ -69,7 +72,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
 
       // Main X and Y Axes with ticks
       const origin = toScreen(vec2(0, 0), width, height);
-      ctx.strokeStyle = '#666666';
+      ctx.strokeStyle = '#777777';
       ctx.lineWidth = 1.5;
 
       // X Axis
@@ -89,7 +92,25 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
       ctx.fillStyle = '#999999';
       ctx.fillText('O', origin.x + 4, origin.y + 14);
 
-      // 3. Draw Power Orbs (Level 7)
+      // 3. Draw Shockwaves (from click/impulse)
+      for (let s = shockwavesRef.current.length - 1; s >= 0; s--) {
+        const sw = shockwavesRef.current[s];
+        sw.radius += 2.5;
+        sw.alpha -= 0.04;
+        if (sw.alpha <= 0) {
+          shockwavesRef.current.splice(s, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.strokeStyle = `rgba(0, 172, 193, ${sw.alpha})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 4. Draw Power Orbs (Level 7)
       for (const orb of engine.orbs) {
         const p = toScreen(orb.position, width, height);
         ctx.save();
@@ -108,7 +129,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
         ctx.fillText(orb.type === 'AMPLITUDE_X2' ? 'a×2' : 'b×2', p.x, p.y);
       }
 
-      // 4. Draw Lasers & Mathematical Curves
+      // 5. Draw Lasers & Mathematical Curves
       for (const laser of engine.activeLasers) {
         const p = toScreen(laser.sourcePos, width, height);
         ctx.save();
@@ -201,7 +222,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
         ctx.restore();
       }
 
-      // 5. Draw Entities
+      // 6. Draw Entities
       const entities = [engine.leftEntity, engine.rightEntity, ...engine.subEntities].filter(
         (e) => !e.isDead
       );
@@ -210,15 +231,74 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
         drawEntity(ctx, entity, width, height);
       }
 
-      // 6. Draw Player Drag Arrow (Aiming / Micro-impulse)
+      // 7. Draw Player Crosshair & Aiming Guide Line (UX Enhancement)
+      const playerEntity = engine.leftEntity;
+      if (!playerEntity.isDead && engine.status === 'COMBAT') {
+        const playerScreen = toScreen(playerEntity.position, width, height);
+
+        // A. Draw aiming laser towards cursor if within bounds
+        if (cursorGamePosRef.current) {
+          const cursorScreen = toScreen(cursorGamePosRef.current, width, height);
+          ctx.save();
+          ctx.setLineDash([4, 4]);
+          ctx.strokeStyle = 'rgba(0, 172, 193, 0.5)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(playerScreen.x, playerScreen.y);
+          ctx.lineTo(cursorScreen.x, cursorScreen.y);
+          ctx.stroke();
+
+          // Target crosshair at cursor
+          ctx.setLineDash([]);
+          ctx.strokeStyle = '#00ACC1';
+          ctx.beginPath();
+          ctx.arc(cursorScreen.x, cursorScreen.y, 6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // B. Distinct Player Indicator / Target Reticle around Player Sphere
+        const r = playerEntity.radius * (width / 90);
+        ctx.save();
+        const spin = Date.now() * 0.002;
+        ctx.strokeStyle = '#00ACC1';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#00ACC1';
+        ctx.shadowBlur = 8;
+
+        // Rotating targeting brackets
+        ctx.beginPath();
+        ctx.arc(playerScreen.x, playerScreen.y, r + 7, spin, spin + Math.PI * 0.6);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(playerScreen.x, playerScreen.y, r + 7, spin + Math.PI, spin + Math.PI * 1.6);
+        ctx.stroke();
+
+        // Player badge tag above player ball
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#00838F';
+        ctx.fillRect(playerScreen.x - 18, playerScreen.y - r - 17, 36, 12);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(playerBadgeText, playerScreen.x, playerScreen.y - r - 11);
+        ctx.restore();
+      }
+
+      // 8. Draw Player Drag Arrow (Slingshot Drag)
       const dragStart = dragStartRef.current;
       const dragCurrent = dragCurrentRef.current;
       if (dragStart && dragCurrent) {
         const start = toScreen(dragStart, width, height);
         const curr = toScreen(dragCurrent, width, height);
 
+        ctx.save();
         ctx.strokeStyle = '#00ACC1';
         ctx.lineWidth = 3;
+        ctx.shadowColor = '#00ACC1';
+        ctx.shadowBlur = 8;
         ctx.beginPath();
         ctx.moveTo(start.x, start.y);
         ctx.lineTo(curr.x, curr.y);
@@ -228,6 +308,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
         ctx.beginPath();
         ctx.arc(curr.x, curr.y, 5, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
       }
 
       // Border of arena (#333333)
@@ -356,9 +437,31 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
 
     animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
-  }, [engine]);
+  }, [engine, playerBadgeText]);
 
-  // Touch and Mouse handlers for user micro-impulse
+  // Pointer Move (tracks cursor for aiming line)
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const gamePos = toGame(x, y, canvas.width, canvas.height);
+
+    cursorGamePosRef.current = gamePos;
+
+    if (dragStartRef.current) {
+      dragCurrentRef.current = gamePos;
+    }
+  };
+
+  const handlePointerLeave = () => {
+    cursorGamePosRef.current = null;
+    dragStartRef.current = null;
+    dragCurrentRef.current = null;
+  };
+
+  // Pointer Down (begins drag or click)
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -371,28 +474,37 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
     dragCurrentRef.current = gamePos;
   };
 
-  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!dragStartRef.current) return;
+  // Pointer Up (resolves click dash or drag slingshot)
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const gamePos = toGame(x, y, canvas.width, canvas.height);
+    const targetGamePos = toGame(x, y, canvas.width, canvas.height);
 
-    dragCurrentRef.current = gamePos;
-  };
-
-  const handlePointerUp = () => {
     const dragStart = dragStartRef.current;
     const dragCurrent = dragCurrentRef.current;
-    if (dragStart && dragCurrent) {
+
+    if (dragStart && dragCurrent && dragStart.distanceTo(dragCurrent) > 5) {
+      // Slingshot drag release
       const impulse = dragCurrent.sub(dragStart);
-      if (impulse.magnitude() > 2) {
-        engine.applyImpulse('LEFT', impulse.scale(-1), 18);
+      engine.applyImpulse('LEFT', impulse.scale(-1), 22);
+      soundManager.playBounce();
+    } else {
+      // Direct click impulse: dash towards target location!
+      const playerPos = engine.leftEntity.position;
+      const dir = targetGamePos.sub(playerPos);
+      if (dir.magnitude() > 1) {
+        engine.applyImpulse('LEFT', dir, 20);
         soundManager.playBounce();
       }
     }
+
+    // Add shockwave effect at player ball position
+    const screenP = toScreen(engine.leftEntity.position, canvas.width, canvas.height);
+    shockwavesRef.current.push({ x: screenP.x, y: screenP.y, radius: 10, alpha: 1.0 });
+
     dragStartRef.current = null;
     dragCurrentRef.current = null;
   };
@@ -405,6 +517,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine }) => {
         height={600}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
+        onPointerLeave={handlePointerLeave}
         onPointerUp={handlePointerUp}
         className="w-full h-full cursor-crosshair touch-none"
       />

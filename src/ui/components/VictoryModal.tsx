@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { soundManager } from '../../audio/WebAudioSynth';
+import { useLanguage } from '../../i18n/LanguageContext';
 import { Trophy, RotateCcw, ArrowRight, Grid } from 'lucide-react';
 
 interface VictoryModalProps {
@@ -23,6 +24,8 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   onSelectLevel,
   hasNextLevel,
 }) => {
+  const { t } = useLanguage();
+
   useEffect(() => {
     soundManager.playVictory();
   }, []);
@@ -41,15 +44,15 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
             className="text-2xl font-black font-mono tracking-tight"
             style={{ color: isLeftWinner ? '#00ACC1' : '#F4511E' }}
           >
-            {winnerSymbol} 승리!
+            {winnerSymbol} {t.victory}
           </h2>
           <p className="text-sm text-slate-300 font-semibold mt-0.5">
-            ¡Victoria de {winnerName}!
+            {winnerName}
           </p>
         </div>
 
         <div className="bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-700 font-mono text-sm text-slate-200">
-          남은 HP: <span className="font-bold text-amber-400">{remainingHp}</span>
+          {t.remainingHp}: <span className="font-bold text-amber-400">{remainingHp}</span>
         </div>
 
         <div className="w-full flex flex-col space-y-2 pt-2">
@@ -58,7 +61,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               onClick={onNextLevel}
               className="w-full py-2.5 px-4 rounded-xl font-bold font-mono text-sm bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/25 flex items-center justify-center space-x-2 transition-all active:scale-95"
             >
-              <span>Siguiente Nivel</span>
+              <span>{t.nextLevel}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           )}
@@ -68,7 +71,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
             className="w-full py-2.5 px-4 rounded-xl font-bold font-mono text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center space-x-2 transition-all active:scale-95"
           >
             <RotateCcw className="w-4 h-4" />
-            <span>Reintentar Partida</span>
+            <span>{t.retry}</span>
           </button>
 
           <button
@@ -76,7 +79,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
             className="w-full py-2 px-4 rounded-xl font-mono text-xs text-slate-400 hover:text-slate-200 flex items-center justify-center space-x-1.5 transition-colors"
           >
             <Grid className="w-3.5 h-3.5" />
-            <span>Selector de Niveles</span>
+            <span>{t.backToLevels}</span>
           </button>
         </div>
       </div>

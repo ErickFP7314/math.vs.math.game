@@ -2,7 +2,7 @@
 change: initial-architecture-and-specs
 status: in-progress
 created_at: "2026-10-17T12:10:00Z"
-current_phase: tasks
+current_phase: verify
 
 phases:
   explore:
@@ -30,9 +30,13 @@ phases:
     artifact: openspec/changes/initial-architecture-and-specs/tasks.md
     notes: "Plan de tareas atómicas y secuenciadas preparadas para ejecución con TDD Estricto."
   apply:
-    status: pending
-    notes: "Próxima fase a ejecutar (implementación por lotes de código)."
+    status: completed
+    completed_at: "2026-10-17T13:20:00Z"
+    artifact: src/
+    notes: "Implementación completa de motor 2D, cinemática vectorial, audio procedural, 10 niveles y feedback de UX/i18n."
   verify:
-    status: pending
+    status: in-progress
+    artifact: openspec/changes/initial-architecture-and-specs/verify-report.md
+    notes: "Fase de testing y verificación activa. Suite de 25 pruebas unitarias en Vitest y build productivo validados."
   archive:
     status: pending

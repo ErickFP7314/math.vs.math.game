@@ -1,5 +1,6 @@
 import React from 'react';
 import { BaseEntity } from '../../core/entities/BaseEntity';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 interface HPBarProps {
   leftEntity: BaseEntity;
@@ -14,6 +15,8 @@ export const HPBar: React.FC<HPBarProps> = ({
   polyHp,
   activeSpheresCount,
 }) => {
+  const { t } = useLanguage();
+
   const leftPercent = Math.max(0, Math.min(100, (leftEntity.hp / leftEntity.maxHp) * 100));
   const rightHp = polyHp ? polyHp.current : rightEntity.hp;
   const rightMaxHp = polyHp ? polyHp.max : rightEntity.maxHp;
@@ -21,38 +24,45 @@ export const HPBar: React.FC<HPBarProps> = ({
 
   // Determine dynamic badge for right entity
   const getRightBadge = () => {
-    if (rightEntity.hasStatus('BURN')) return '[화상 중!] (En llamas)';
-    if (rightEntity.isImmuneToDerivative) return '[미분 면역!] (Inmune)';
+    if (rightEntity.hasStatus('BURN')) return `[${t.onFire}]`;
+    if (rightEntity.isImmuneToDerivative) return `[${t.immune}]`;
     if (rightEntity.symbol === 'x³') {
-      return rightEntity.isReady() ? '[그래프 소환!] (Listo)' : `[공 ${activeSpheresCount}개]`;
+      return rightEntity.isReady()
+        ? `[${t.graphInvoke}]`
+        : `[${activeSpheresCount} ${t.spheresCount}]`;
     }
     if (rightEntity.symbol === 'eˣ' || rightEntity.symbol === 'eˣʸ') {
       return rightEntity.isReady()
-        ? '[지수 칼날!] (Listo)'
-        : `[쿨타임 ${Math.ceil(rightEntity.cooldownRemaining)}s]`;
+        ? `[${t.expBlade}]`
+        : `[${t.recharging} ${Math.ceil(rightEntity.cooldownRemaining)}s]`;
     }
     if (rightEntity.symbol === 'i') {
-      const phases = ['[i 관통]', '[-1 반사]', '[-i 관통+반사]', '[1 일반]'];
+      const phases = [
+        `[${t.phaseI}]`,
+        `[${t.phaseMinus1}]`,
+        `[${t.phaseMinusI}]`,
+        `[${t.phase1}]`,
+      ];
       return phases[rightEntity.currentPhaseIndex % 4];
     }
     if (rightEntity.symbol === 'π') {
-      return `[부채꼴 θ = ${(rightEntity.sectorAngle / Math.PI).toFixed(2)}π]`;
+      return `[${t.sectorSlash} θ = ${(rightEntity.sectorAngle / Math.PI).toFixed(2)}π]`;
     }
     if (rightEntity.symbol === 'cos x' || rightEntity.symbol === 'sin x') {
       return rightEntity.isReady()
-        ? '[코사인파!] (Listo)'
+        ? `[${t.cosineWave}]`
         : `[T = ${rightEntity.cooldownRemaining.toFixed(1)}s]`;
     }
-    return rightEntity.isReady() ? '[READY]' : `[${Math.ceil(rightEntity.cooldownRemaining)}s]`;
+    return rightEntity.isReady() ? `[${t.ready}]` : `[${t.recharging} ${Math.ceil(rightEntity.cooldownRemaining)}s]`;
   };
 
   const getLeftBadge = () => {
-    if (leftEntity.hasStatus('BURN')) return '[화상 중!]';
-    if (leftEntity.symbol === 'd/dx') return '[미분 준비] (Listo)';
-    if (leftEntity.symbol === '∂/∂y') return '[y 편미분 준비] (One-shot)';
-    if (leftEntity.symbol === '∫') return leftEntity.isReady() ? '[∫ 채찍 준비]' : '[충전 중]';
-    if (leftEntity.symbol === 'sin x') return leftEntity.isReady() ? '[사인파!]' : `[T = ${leftEntity.cooldownRemaining.toFixed(1)}s]`;
-    return leftEntity.isReady() ? '[READY]' : `[${Math.ceil(leftEntity.cooldownRemaining)}s]`;
+    if (leftEntity.hasStatus('BURN')) return `[${t.onFire}]`;
+    if (leftEntity.symbol === 'd/dx') return `[${t.ready}]`;
+    if (leftEntity.symbol === '∂/∂y') return `[${t.partialYReady}]`;
+    if (leftEntity.symbol === '∫') return leftEntity.isReady() ? `[${t.integralWhip}]` : `[${t.recharging}]`;
+    if (leftEntity.symbol === 'sin x') return leftEntity.isReady() ? `[${t.sineWave}]` : `[T = ${leftEntity.cooldownRemaining.toFixed(1)}s]`;
+    return leftEntity.isReady() ? `[${t.ready}]` : `[${t.recharging} ${Math.ceil(leftEntity.cooldownRemaining)}s]`;
   };
 
   return (

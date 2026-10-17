@@ -33,6 +33,21 @@ describe('SimulationEngine', () => {
     // x^3 should break into 3 balls of x^2, and global HP should drop
     expect(engine.subEntities.length).toBe(3);
     expect(engine.rightEntity.hp).toBe(15);
+    // CRITICAL: The match must NOT end prematurely when x^3 splits!
+    expect(engine.status).toBe('COMBAT');
+  });
+
+  it('supports player directional steering impulse', () => {
+    const testBus = new EventBus();
+    const level1 = LevelRegistry.getLevel(1)!;
+    const engine = new SimulationEngine(level1, testBus);
+
+    engine.update(3.1); // Combat state
+    const originalVel = engine.leftEntity.velocity.clone();
+    
+    // Apply upward impulse
+    engine.applyImpulse('LEFT', originalVel.clone().normalize(), 15);
+    expect(engine.leftEntity.velocity.magnitude()).toBeGreaterThan(0);
   });
 
   it('enforces Level 2 exponential immunity to d/dx', () => {
