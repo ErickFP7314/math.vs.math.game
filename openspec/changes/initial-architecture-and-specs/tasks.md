@@ -10,54 +10,54 @@
 ## ÉPICA 1: Motor Físico y Núcleo de Simulación (Core Engine)
 
 ### Feature 01: Bucle de Tiempo Fijo y Acumulador (Fixed Timestep Loop)
-- [ ] **T-01.1 (RED):** Escribir pruebas unitarias en `tests/engine/GameLoop.test.ts` para validar que el bucle avance en incrementos exactos de 16.666 ms independientemente del `deltaTime` del navegador.
-- [ ] **T-01.2 (GREEN):** Implementar la clase `src/core/engine/GameLoop.ts` con el patrón de acumulador de tiempo y límite de prevención de congelamiento (`MAX_ACCUMULATOR = 0.25`).
-- [ ] **T-01.3 (RED):** Escribir pruebas unitarias para `getStateSnapshot()` asegurando la inmutabilidad y serialización del estado del mundo.
-- [ ] **T-01.4 (GREEN):** Implementar generación de instantáneas inmutables en `src/core/engine/SimulationEngine.ts`.
-- [ ] **T-01.5 (REFACTOR):** Optimizar la asignación de memoria reutilizando estructuras internas para reducir recolección de basura.
+- [x] **T-01.1 (RED):** Escribir pruebas unitarias en `tests/engine/GameLoop.test.ts` para validar que el bucle avance en incrementos exactos de 16.666 ms independientemente del `deltaTime` del navegador.
+- [x] **T-01.2 (GREEN):** Implementar la clase `src/core/engine/GameLoop.ts` con el patrón de acumulador de tiempo y límite de prevención de congelamiento (`MAX_ACCUMULATOR = 0.25`).
+- [x] **T-01.3 (RED):** Escribir pruebas unitarias para `getStateSnapshot()` asegurando la inmutabilidad y serialización del estado del mundo.
+- [x] **T-01.4 (GREEN):** Implementar generación de instantáneas inmutables en `src/core/engine/SimulationEngine.ts`.
+- [x] **T-01.5 (REFACTOR):** Optimizar la asignación de memoria reutilizando estructuras internas para reducir recolección de basura.
 
 ### Feature 02: Cinemática Vectorial 2D y Rebote Elástico
-- [ ] **T-02.1 (RED):** Escribir suite de pruebas en `tests/physics/Vector2D.test.ts` cubriendo operaciones vectoriales (suma, resta, producto escalar, magnitud, normalización y rotación).
-- [ ] **T-02.2 (GREEN):** Implementar `src/core/physics/Vector2D.ts` con funciones puras e inmutables.
-- [ ] **T-02.3 (RED):** Escribir pruebas en `tests/physics/ElasticSolver.test.ts` validando la conservación de momento lineal y corrección posicional en choques elásticos 2D de esferas.
-- [ ] **T-02.4 (GREEN):** Implementar `src/core/physics/ElasticSolver.ts` con cálculo analítico del impulso elástico $J$ y resolución de penetración.
-- [ ] **T-02.5 (REFACTOR):** Documentar casos límite matemáticos en `ElasticSolver.ts` (masas asimétricas y choques a velocidad cero).
+- [x] **T-02.1 (RED):** Escribir suite de pruebas en `tests/physics/Vector2D.test.ts` cubriendo operaciones vectoriales (suma, resta, producto escalar, magnitud, normalización y rotación).
+- [x] **T-02.2 (GREEN):** Implementar `src/core/physics/Vector2D.ts` con funciones puras e inmutables.
+- [x] **T-02.3 (RED):** Escribir pruebas en `tests/physics/ElasticSolver.test.ts` validando la conservación de momento lineal y corrección posicional en choques elásticos 2D de esferas.
+- [x] **T-02.4 (GREEN):** Implementar `src/core/physics/ElasticSolver.ts` con cálculo analítico del impulso elástico $J$ y resolución de penetración.
+- [x] **T-02.5 (REFACTOR):** Documentar casos límite matemáticos en `ElasticSolver.ts` (masas asimétricas y choques a velocidad cero).
 
 ### Feature 03: Confinamiento en Arena y Detección de Curvas
-- [ ] **T-03.1 (RED):** Escribir pruebas en `tests/physics/CollisionDetector.test.ts` para rebotes contra las 4 paredes del lienzo 9:16.
-- [ ] **T-03.2 (GREEN):** Implementar detección y corrección de límites de arena en `CollisionDetector.ts`.
-- [ ] **T-03.3 (RED):** Escribir pruebas unitarias para la intersección analítica de esferas contra polinomios, curvas exponenciales y ondas en `tests/math/Curves.test.ts`.
-- [ ] **T-03.4 (GREEN):** Implementar ecuaciones paramétricas y muestreo analítico de distancias en `src/core/math/Curves.ts`.
+- [x] **T-03.1 (RED):** Escribir pruebas en `tests/physics/CollisionDetector.test.ts` para rebotes contra las 4 paredes del lienzo 9:16.
+- [x] **T-03.2 (GREEN):** Implementar detección y corrección de límites de arena en `CollisionDetector.ts`.
+- [x] **T-03.3 (RED):** Escribir pruebas unitarias para la intersección analítica de esferas contra polinomios, curvas exponenciales y ondas en `tests/math/Curves.test.ts`.
+- [x] **T-03.4 (GREEN):** Implementar ecuaciones paramétricas y muestreo analítico de distancias en `src/core/math/Curves.ts`.
 
 ---
 
 ## ÉPICA 2: Entidades Matemáticas y Reglas de Combate
 
 ### Feature 04: Operador Diferencial (d/dx)
-- [ ] **T-04.1 (RED):** Escribir pruebas para la reducción de grado polinómico en `tests/entities/DifferentialOperator.test.ts`.
-- [ ] **T-04.2 (GREEN):** Implementar clase `src/core/entities/DifferentialOperator.ts` con HP = 100, color cian `#00ACC1` y lógica de derivación por impacto.
-- [ ] **T-04.3 (REFACTOR):** Desacoplar eventos de fórmulas matemáticas al `EventBus`.
+- [x] **T-04.1 (RED):** Escribir pruebas para la reducción de grado polinómico en `tests/entities/DifferentialOperator.test.ts`.
+- [x] **T-04.2 (GREEN):** Implementar clase `src/core/entities/DifferentialOperator.ts` con HP = 100, color cian `#00ACC1` y lógica de derivación por impacto.
+- [x] **T-04.3 (REFACTOR):** Desacoplar eventos de fórmulas matemáticas al `EventBus`.
 
 ### Feature 05: Polinomios (x^3, x^2, x, 1) y Gráficos Láser
-- [ ] **T-05.1 (RED):** Escribir pruebas para la división de $x^3 \rightarrow 3x^2 \rightarrow 2x \rightarrow 1 \rightarrow 0$ y decremento de HP global (16/16) en `tests/entities/PolynomialEntity.test.ts`.
-- [ ] **T-05.2 (GREEN):** Implementar `src/core/entities/PolynomialEntity.ts` con jerarquía de radios, colores naranjas y salud global compartida.
-- [ ] **T-05.3 (RED):** Escribir pruebas para la habilidad "Invocación de Gráfico" (telegrafiado 0.8s, daño de láser de $x^2$ = -23 HP, $x/1$ = -18 HP).
-- [ ] **T-05.4 (GREEN):** Implementar temporizador y disparo de láseres en `PolynomialEntity.ts`.
+- [x] **T-05.1 (RED):** Escribir pruebas para la división de $x^3 \rightarrow 3x^2 \rightarrow 2x \rightarrow 1 \rightarrow 0$ y decremento de HP global (16/16) en `tests/entities/PolynomialEntity.test.ts`.
+- [x] **T-05.2 (GREEN):** Implementar `src/core/entities/PolynomialEntity.ts` con jerarquía de radios, colores naranjas y salud global compartida.
+- [x] **T-05.3 (RED):** Escribir pruebas para la habilidad "Invocación de Gráfico" (telegrafiado 0.8s, daño de láser de $x^2$ = -23 HP, $x/1$ = -18 HP).
+- [x] **T-05.4 (GREEN):** Implementar temporizador y disparo de láseres en `PolynomialEntity.ts`.
 
 ### Feature 06: Exponencial (e^x), Inmunidad y Quemadura
-- [ ] **T-06.1 (RED):** Escribir pruebas en `tests/entities/ExponentialEntity.test.ts` verificando que $d/dx$ no reduzca la salud de $e^x$ (inmunidad total con escudo).
-- [ ] **T-06.2 (GREEN):** Implementar escudo de inmunidad en `src/core/entities/ExponentialEntity.ts`.
-- [ ] **T-06.3 (RED):** Escribir pruebas para la quemadura DoT (-4 inicial, -2 por tick) y la Cuchilla Exponencial (-10 a -13 HP).
-- [ ] **T-06.4 (GREEN):** Implementar aplicación de DoT y trazado de la Cuchilla Exponencial con asíntota en `ExponentialEntity.ts`.
+- [x] **T-06.1 (RED):** Escribir pruebas en `tests/entities/ExponentialEntity.test.ts` verificando que $d/dx$ no reduzca la salud de $e^x$ (inmunidad total con escudo).
+- [x] **T-06.2 (GREEN):** Implementar escudo de inmunidad en `src/core/entities/ExponentialEntity.ts`.
+- [x] **T-06.3 (RED):** Escribir pruebas para la quemadura DoT (-4 inicial, -2 por tick) y la Cuchilla Exponencial (-10 a -13 HP).
+- [x] **T-06.4 (GREEN):** Implementar aplicación de DoT y trazado de la Cuchilla Exponencial con asíntota en `ExponentialEntity.ts`.
 
 ### Feature 07: Unidad Imaginaria (i) y Fases Cíclicas
-- [ ] **T-07.1 (RED):** Escribir pruebas para la rotación de fases cada 3.0s ($i \rightarrow -1 \rightarrow -i \rightarrow 1$) en `tests/entities/ImaginaryEntity.test.ts`.
-- [ ] **T-07.2 (GREEN):** Implementar máquina de fases de $i$ en `src/core/entities/ImaginaryEntity.ts`.
-- [ ] **T-07.3 (RED):** Escribir pruebas para el daño por cruce intangible (-8 HP) en fase $i$ y la reflexión de daño ($\times (-1)$) en fase $-1$.
-- [ ] **T-07.4 (GREEN):** Implementar lógica de intangibilidad y proyectiles reflejados en `ImaginaryEntity.ts`.
+- [x] **T-07.1 (RED):** Escribir pruebas para la rotación de fases cada 3.0s ($i \rightarrow -1 \rightarrow -i \rightarrow 1$) en `tests/entities/ImaginaryEntity.test.ts`.
+- [x] **T-07.2 (GREEN):** Implementar máquina de fases de $i$ en `src/core/entities/ImaginaryEntity.ts`.
+- [x] **T-07.3 (RED):** Escribir pruebas para el daño por cruce intangible (-8 HP) en fase $i$ y la reflexión de daño ($\times (-1)$) en fase $-1$.
+- [x] **T-07.4 (GREEN):** Implementar lógica de intangibilidad y proyectiles reflejados en `ImaginaryEntity.ts`.
 
 ### Feature 08: Derivada Parcial (∂/∂y) y Multivariable
-- [ ] **T-08.1 (RED):** Escribir pruebas en `tests/entities/PartialDerivative.test.ts` para la aniquilación letal instantánea $\frac{\partial}{\partial y}(e^x) = 0$ (-80 HP).
+- [x] **T-08.1 (RED):** Escribir pruebas en `tests/entities/PartialDerivative.test.ts` para la aniquilación letal instantánea $\frac{\partial}{\partial y}(e^x) = 0$ (-80 HP).
 - [ ] **T-08.2 (GREEN):** Implementar entidad `PartialDerivative.ts` con color verde esmeralda y regla de daño crítico mortal.
 - [ ] **T-08.3 (RED):** Escribir pruebas para la regla de la cadena multivariable $\frac{\partial}{\partial y}(e^{xy}) = x \cdot e^{xy}$.
 - [ ] **T-08.4 (GREEN):** Implementar variante multivariable de absorción orbital.

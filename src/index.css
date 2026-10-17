@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom smooth animations & math canvas styling */
+@layer base {
+  body {
+    @apply antialiased m-0 p-0 overflow-x-hidden;
+  }
+}
