@@ -79,3 +79,43 @@ html:not(.dark) * {
 .animate-onomatopoeia {
   animation: onomatopoeia-burst 1.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Shake animation for HP Bars when hit */
+@keyframes hp-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px) rotate(-1deg); }
+  40% { transform: translateX(5px) rotate(1deg); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+
+.animate-hp-shake {
+  animation: hp-shake 0.45s ease-in-out;
+}
+
+/* Big floating damage number animation (-18) */
+@keyframes damage-float {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -75%) scale(1.4);
+  }
+  30% {
+    transform: translate(-50%, -90%) scale(1.15);
+  }
+  75% {
+    opacity: 1;
+    transform: translate(-50%, -120%) scale(1.0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -150%) scale(0.85);
+  }
+}
+
+.animate-damage-float {
+  animation: damage-float 1.25s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+}

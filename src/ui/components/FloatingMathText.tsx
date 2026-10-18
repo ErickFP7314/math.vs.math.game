@@ -10,13 +10,14 @@ interface Onomatopoeia {
   xPercent: number;
   yPercent: number;
   createdAt: number;
+  isDamage?: boolean;
 }
 
 export const FloatingMathText: React.FC = () => {
   const [items, setItems] = useState<Onomatopoeia[]>([]);
 
   useEffect(() => {
-    const unsubscribe = globalEventBus.on('MATH_FORMULA', (payload) => {
+    const unsubFormula = globalEventBus.on('MATH_FORMULA', (payload) => {
       soundManager.playChime();
       let renderedHtml = payload.latex;
       try {
@@ -28,11 +29,11 @@ export const FloatingMathText: React.FC = () => {
         renderedHtml = payload.latex;
       }
 
-      // Convert game coordinates [-45..45, -75..75] to arena percentage
+      // Convert game coordinates [-50..50, -50..50] to arena percentage
       const rawX = payload.position ? payload.position.x : 0;
       const rawY = payload.position ? payload.position.y : 0;
-      const xPercent = Math.max(12, Math.min(88, ((rawX + 45) / 90) * 100));
-      const yPercent = Math.max(12, Math.min(88, ((75 - rawY) / 150) * 100));
+      const xPercent = Math.max(10, Math.min(90, ((rawX + 50) / 100) * 100));
+      const yPercent = Math.max(10, Math.min(90, ((50 - rawY) / 100) * 100));
 
       const newItem: Onomatopoeia = {
         id: `ono_${Date.now()}_${Math.random()}`,
@@ -43,7 +44,28 @@ export const FloatingMathText: React.FC = () => {
         createdAt: Date.now(),
       };
 
-      setItems((prev) => [...prev.slice(-4), newItem]); // keep last 5 active
+      setItems((prev) => [...prev.slice(-6), newItem]); // keep last active
+    });
+
+    const unsubDamage = globalEventBus.on('DAMAGE_DEALT', (payload) => {
+      soundManager.playDamage();
+
+      const rawX = payload.position ? payload.position.x : 0;
+      const rawY = payload.position ? payload.position.y : 0;
+      const xPercent = Math.max(10, Math.min(90, ((rawX + 50) / 100) * 100));
+      const yPercent = Math.max(10, Math.min(90, ((50 - rawY) / 100) * 100));
+
+      const newItem: Onomatopoeia = {
+        id: `dmg_${Date.now()}_${Math.random()}`,
+        html: `-${payload.amount}`,
+        color: payload.color || '#EF4444',
+        xPercent,
+        yPercent,
+        createdAt: Date.now(),
+        isDamage: true,
+      };
+
+      setItems((prev) => [...prev.slice(-6), newItem]);
     });
 
     // Cleanup items older than 1.4 seconds
@@ -53,7 +75,8 @@ export const FloatingMathText: React.FC = () => {
     }, 150);
 
     return () => {
-      unsubscribe();
+      unsubFormula();
+      unsubDamage();
       clearInterval(interval);
     };
   }, []);
@@ -63,12 +86,18 @@ export const FloatingMathText: React.FC = () => {
       {items.map((item) => (
         <div
           key={item.id}
-          className="absolute select-none font-black italic tracking-wide text-2xl sm:text-3xl text-center whitespace-nowrap animate-onomatopoeia"
+          className={`absolute select-none font-black italic tracking-wide text-center whitespace-nowrap ${
+            item.isDamage
+              ? 'text-4xl sm:text-5xl font-mono text-red-500 animate-damage-float'
+              : 'text-2xl sm:text-3xl animate-onomatopoeia'
+          }`}
           style={{
             left: `${item.xPercent}%`,
             top: `${item.yPercent}%`,
             color: item.color,
-            textShadow: `0 0 16px ${item.color}, 0 0 32px ${item.color}, 0 2px 4px rgba(0,0,0,0.85)`,
+            textShadow: item.isDamage
+              ? `0 0 16px ${item.color}, 0 2px 8px rgba(0,0,0,0.95)`
+              : `0 0 16px ${item.color}, 0 0 32px ${item.color}, 0 2px 4px rgba(0,0,0,0.85)`,
             filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.9))',
           }}
           dangerouslySetInnerHTML={{ __html: item.html }}

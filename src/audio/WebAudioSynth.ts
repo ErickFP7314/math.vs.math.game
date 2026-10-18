@@ -151,6 +151,33 @@ export class WebAudioSynth {
   }
 
   /**
+   * Heavy damage hit sound
+   */
+  playDamage(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(140, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(35, ctx.currentTime + 0.15);
+
+      gain.gain.setValueAtTime(0.28, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } catch {
+      // AudioContext unavailable in headless environments
+    }
+  }
+
+  /**
    * Formula triggered chime
    */
   playChime(): void {

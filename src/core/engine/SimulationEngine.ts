@@ -212,6 +212,14 @@ export class SimulationEngine {
     const player = isPlayerA ? a : b;
     const enemy = isPlayerA ? b : a;
 
+    // Interrupt enemy laser if hit by player (Requirement 0.3)
+    const hadEnemyLaser = this.activeLasers.some((l) => l.ownerId !== player.id);
+    if (hadEnemyLaser) {
+      this.activeLasers = this.activeLasers.filter((l) => l.ownerId === player.id);
+      this.isFrozen = this.activeLasers.length > 0;
+      this.enemyShootTimer = 3.0; // Reset shoot timer after interruption
+    }
+
     // Handle Imaginary Unit phase intangible check
     const imagEntity = a.symbol === 'i' ? a : b.symbol === 'i' ? b : null;
     if (imagEntity && (imagEntity.currentPhaseIndex === 0 || imagEntity.currentPhaseIndex === 2)) {
@@ -428,6 +436,19 @@ export class SimulationEngine {
       this.rightEntity.hp = this.polyGlobalHp.current;
     }
 
+    // Calculate repulsion direction away from the player / hit (Requirement 0.2)
+    let blastDir = sphere.position.sub(this.leftEntity.position);
+    if (blastDir.magnitude() < 0.1 && collisionPos) {
+      blastDir = sphere.position.sub(collisionPos);
+    }
+    if (blastDir.magnitude() < 0.1) {
+      blastDir = vec2(1, 0); // fallback towards right
+    } else {
+      blastDir = blastDir.normalize();
+    }
+    const baseAngle = Math.atan2(blastDir.y, blastDir.x);
+    const blastSpeed = 28;
+
     if (sphere.symbol === 'x³') {
       sphere.isDead = true;
       this.eventBus.emit('MATH_FORMULA', {
@@ -435,9 +456,11 @@ export class SimulationEngine {
         position: { x: pos.x, y: pos.y },
         color: '#00ACC1',
       });
-      // Spawn 3 spheres of x^2
+      // Spawn 3 spheres of x^2 flying away from player in a spread cone
       for (let k = 0; k < 3; k++) {
-        const offset = vec2((k - 1) * 8, (k - 1) * 6);
+        const spreadAngle = baseAngle + (k - 1) * 0.45; // -26°, 0°, +26°
+        const dir = vec2(Math.cos(spreadAngle), Math.sin(spreadAngle));
+        const offset = dir.scale(6);
         const sub = new BaseEntity({
           id: `poly_x2_${Date.now()}_${k}_${Math.random()}`,
           name: 'x²',
@@ -450,7 +473,7 @@ export class SimulationEngine {
           radius: 6,
           mass: 1.0,
           position: sphere.position.add(offset),
-          velocity: vec2(Math.sin(k * 2 + 1) * 22, Math.cos(k * 2 + 1) * 22),
+          velocity: dir.scale(blastSpeed + (k === 1 ? 4 : 0)),
         });
         this.subEntities.push(sub);
       }
@@ -461,9 +484,11 @@ export class SimulationEngine {
         position: { x: pos.x, y: pos.y },
         color: '#00ACC1',
       });
-      // Spawn 2 spheres of x
+      // Spawn 2 spheres of x flying away from player
       for (let k = 0; k < 2; k++) {
-        const offset = vec2((k === 0 ? -1 : 1) * 6, 0);
+        const spreadAngle = baseAngle + (k === 0 ? -0.35 : 0.35);
+        const dir = vec2(Math.cos(spreadAngle), Math.sin(spreadAngle));
+        const offset = dir.scale(5);
         const sub = new BaseEntity({
           id: `poly_x_${Date.now()}_${k}_${Math.random()}`,
           name: 'x',
@@ -476,7 +501,7 @@ export class SimulationEngine {
           radius: 4.8,
           mass: 0.8,
           position: sphere.position.add(offset),
-          velocity: vec2((k === 0 ? -18 : 18), 18),
+          velocity: dir.scale(blastSpeed * 1.1),
         });
         this.subEntities.push(sub);
       }
@@ -485,6 +510,8 @@ export class SimulationEngine {
       sphere.name = '1';
       sphere.radius = 3.6;
       sphere.color = '#FFD54F';
+      // Push the transformed sphere 1 away from player
+      sphere.velocity = blastDir.scale(blastSpeed);
       this.eventBus.emit('MATH_FORMULA', {
         latex: '\\frac{d}{dx}(x) = 1',
         position: { x: pos.x, y: pos.y },

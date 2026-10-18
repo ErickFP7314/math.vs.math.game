@@ -43,6 +43,7 @@ export interface Translations {
   phaseMinus1: string;
   phaseMinusI: string;
   phase1: string;
+  fight: string;
   levels: Record<number, LevelTranslation>;
 }
 
@@ -80,6 +81,7 @@ export const translations: Record<Language, Translations> = {
     phaseMinus1: '-1 (Reflect)',
     phaseMinusI: '-i (Pierce+Reflect)',
     phase1: '1 (Normal)',
+    fight: 'Fight!',
     levels: {
       1: {
         title: 'Differential Operator vs. Polynomial',
@@ -206,6 +208,7 @@ export const translations: Record<Language, Translations> = {
     phaseMinus1: '-1 (Reflexión)',
     phaseMinusI: '-i (Perforación+Reflexión)',
     phase1: '1 (Normal)',
+    fight: '¡Pelea!',
     levels: {
       1: {
         title: 'Operador Diferencial vs. Polinomio',
@@ -332,6 +335,7 @@ export const translations: Record<Language, Translations> = {
     phaseMinus1: '-1 (반사)',
     phaseMinusI: '-i (관통+반사)',
     phase1: '1 (일반)',
+    fight: '파이트!',
     levels: {
       1: {
         title: '미분 연산자 vs. 다항함수',

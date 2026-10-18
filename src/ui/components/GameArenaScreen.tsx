@@ -38,7 +38,7 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   const [engine, setEngine] = useState(() => new SimulationEngine(level));
   const [, setRenderTrigger] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
-  const [countdown, setCountdown] = useState<number | null>(3);
+  const [countdown, setCountdown] = useState<number | string | null>(3);
   const [matchWinner, setMatchWinner] = useState<{
     winner: 'LEFT' | 'RIGHT';
     remainingHp: number;
@@ -46,6 +46,7 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   } | null>(null);
   const [showModal, setShowModal] = useState(false);
   const modalTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const fightTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const loopRef = useRef<GameLoop | null>(null);
 
@@ -54,6 +55,10 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
     if (modalTimerRef.current) {
       clearTimeout(modalTimerRef.current);
       modalTimerRef.current = null;
+    }
+    if (fightTimerRef.current) {
+      clearTimeout(fightTimerRef.current);
+      fightTimerRef.current = null;
     }
     setShowModal(false);
     const newEngine = new SimulationEngine(level);
@@ -71,8 +76,12 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
     });
 
     const unsubStart = globalEventBus.on('MATCH_START', () => {
-      setCountdown(null);
+      setCountdown(t.fight);
       soundManager.playStart();
+      if (fightTimerRef.current) clearTimeout(fightTimerRef.current);
+      fightTimerRef.current = setTimeout(() => {
+        setCountdown(null);
+      }, 900);
     });
 
     const unsubOver = globalEventBus.on('MATCH_OVER', (payload) => {
@@ -110,6 +119,10 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
     loop.start();
 
     return () => {
+      if (fightTimerRef.current) {
+        clearTimeout(fightTimerRef.current);
+        fightTimerRef.current = null;
+      }
       if (modalTimerRef.current) {
         clearTimeout(modalTimerRef.current);
         modalTimerRef.current = null;
@@ -123,6 +136,10 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   }, [levelId, restartKey, level]);
 
   const handleRestart = () => {
+    if (fightTimerRef.current) {
+      clearTimeout(fightTimerRef.current);
+      fightTimerRef.current = null;
+    }
     if (modalTimerRef.current) {
       clearTimeout(modalTimerRef.current);
       modalTimerRef.current = null;
@@ -212,13 +229,22 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
         {/* Floating Comic Math Onomatopoeia Popups */}
         <FloatingMathText />
 
-        {/* Countdown Overlay (3, 2, 1) */}
-        {countdown !== null && engine.status === 'COUNTDOWN' && (
+        {/* Countdown Overlay (3, 2, 1, FIGHT!) */}
+        {countdown !== null && (
           <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center">
             <div
-              key={countdown}
-              className="text-8xl font-black font-mono text-black select-none animate-pulse drop-shadow-[0_2px_12px_rgba(255,255,255,0.9)]"
-              style={{ WebkitTextStroke: '1px rgba(255,255,255,0.7)' }}
+              key={String(countdown)}
+              className={`font-black font-mono select-none drop-shadow-[0_2px_12px_rgba(255,255,255,0.9)] ${
+                typeof countdown === 'string'
+                  ? 'text-6xl sm:text-7xl text-amber-500 animate-bounce tracking-wider'
+                  : 'text-8xl text-black animate-pulse'
+              }`}
+              style={{
+                WebkitTextStroke:
+                  typeof countdown === 'string'
+                    ? '2px rgba(0,0,0,0.85)'
+                    : '1px rgba(255,255,255,0.7)',
+              }}
             >
               {countdown}
             </div>

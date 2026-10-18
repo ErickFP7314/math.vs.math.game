@@ -187,4 +187,79 @@ describe('SimulationEngine', () => {
     // Once laser finishes, spheres must unfreeze
     expect(engine.isFrozen).toBe(false);
   });
+
+  it('interrupts active enemy laser when player collides with enemy sphere (Requirement 0.3)', () => {
+    const level1 = LevelRegistry.getLevel(1)!;
+    const engine = new SimulationEngine(level1);
+
+    // Enter combat and advance until enemy attacks
+    engine.update(3.1);
+    engine.update(3.0);
+    expect(engine.activeLasers.length).toBeGreaterThan(0);
+    expect(engine.isFrozen).toBe(true);
+
+    // Player strikes enemy sphere
+    engine.leftEntity.position = engine.rightEntity.position.clone().add(vec2(1, 0));
+    engine.update(0.016); // Trigger collision check
+
+    // Active enemy laser should be destroyed and enemy unfrozen!
+    expect(engine.activeLasers.length).toBe(0);
+    expect(engine.isFrozen).toBe(false);
+  });
+
+  it('launches split enemy polynomial spheres in directions away from the player (Requirement 0.2)', () => {
+    const level1 = LevelRegistry.getLevel(1)!;
+    const engine = new SimulationEngine(level1);
+
+    engine.update(3.1); // Enter combat
+
+    // Position player to the left of the enemy x^3
+    engine.leftEntity.position = vec2(-10, 0);
+    engine.rightEntity.position = vec2(0, 0);
+
+    // Collide player with enemy x^3
+    engine.leftEntity.position = vec2(-2, 0);
+    engine.update(0.016);
+
+    // x^3 splits into 3 spheres of x^2
+    expect(engine.subEntities.length).toBe(3);
+    for (const sub of engine.subEntities) {
+      // Since player was at x=-2 and enemy was at x=0, all spawned spheres should fly to the right (velocity.x > 0)
+      expect(sub.velocity.x).toBeGreaterThan(0);
+    }
+  });
+
+  it('emits DAMAGE_DEALT with position and laser damage amount when beam hits player (Requirement 0.4)', () => {
+    const testBus = new EventBus();
+    let damagePayload: any = null;
+    testBus.on('DAMAGE_DEALT', (payload) => {
+      damagePayload = payload;
+    });
+
+    const level1 = LevelRegistry.getLevel(1)!;
+    const engine = new SimulationEngine(level1, testBus);
+
+    engine.update(3.1);
+
+    // Manually add an active horizontal laser hitting player
+    engine.leftEntity.position = vec2(0, 0);
+    engine.leftEntity.radius = 8;
+    engine.activeLasers.push({
+      id: 'test_laser_18',
+      ownerId: engine.rightEntity.id,
+      sourcePos: vec2(0, 0),
+      curveType: 'HORIZONTAL',
+      isTelegraph: false,
+      telegraphTime: 0,
+      durationRemaining: 1.0,
+      damage: 18,
+    });
+
+    engine.update(0.016);
+
+    expect(damagePayload).not.toBeNull();
+    expect(damagePayload.targetId).toBe(engine.leftEntity.id);
+    expect(damagePayload.amount).toBe(18);
+    expect(damagePayload.position).toBeDefined();
+  });
 });

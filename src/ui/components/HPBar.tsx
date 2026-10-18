@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BaseEntity } from '../../core/entities/BaseEntity';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme/ThemeContext';
+import { globalEventBus } from '../../core/engine/EventBus';
 
 interface HPBarProps {
   leftEntity: BaseEntity;
@@ -19,6 +20,31 @@ export const HPBar: React.FC<HPBarProps> = ({
   const { t } = useLanguage();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+
+  const [shakingLeft, setShakingLeft] = useState(false);
+  const [shakingRight, setShakingRight] = useState(false);
+  const leftShakeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const rightShakeTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const unsubDamage = globalEventBus.on('DAMAGE_DEALT', (payload) => {
+      if (payload.targetId === leftEntity.id) {
+        setShakingLeft(true);
+        if (leftShakeTimerRef.current) clearTimeout(leftShakeTimerRef.current);
+        leftShakeTimerRef.current = setTimeout(() => setShakingLeft(false), 450);
+      } else {
+        setShakingRight(true);
+        if (rightShakeTimerRef.current) clearTimeout(rightShakeTimerRef.current);
+        rightShakeTimerRef.current = setTimeout(() => setShakingRight(false), 450);
+      }
+    });
+
+    return () => {
+      unsubDamage();
+      if (leftShakeTimerRef.current) clearTimeout(leftShakeTimerRef.current);
+      if (rightShakeTimerRef.current) clearTimeout(rightShakeTimerRef.current);
+    };
+  }, [leftEntity.id, rightEntity.id]);
 
   const leftPercent = Math.max(0, Math.min(100, (leftEntity.hp / leftEntity.maxHp) * 100));
   const rightHp = polyHp ? polyHp.current : rightEntity.hp;
@@ -76,7 +102,7 @@ export const HPBar: React.FC<HPBarProps> = ({
     >
       <div className="grid grid-cols-2 gap-3 items-center">
         {/* Left Health Bar (Cyan) */}
-        <div className="flex flex-col">
+        <div className={`flex flex-col transition-transform ${shakingLeft ? 'animate-hp-shake' : ''}`}>
           <div
             className={`w-full h-6 rounded-[2px] overflow-hidden border relative flex items-center justify-center ${
               isDark ? 'bg-slate-800 border-cyan-800' : 'bg-slate-100 border-[#0090C8]'
@@ -98,7 +124,7 @@ export const HPBar: React.FC<HPBarProps> = ({
         </div>
 
         {/* Right Health Bar (Orange) */}
-        <div className="flex flex-col text-right">
+        <div className={`flex flex-col text-right transition-transform ${shakingRight ? 'animate-hp-shake' : ''}`}>
           <div
             className={`w-full h-6 rounded-[2px] overflow-hidden border relative flex items-center justify-center ${
               isDark ? 'bg-slate-800 border-orange-800' : 'bg-slate-100 border-[#EA580C]'

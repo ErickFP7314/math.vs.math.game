@@ -4,6 +4,7 @@ import { BaseEntity } from '../core/entities/BaseEntity';
 import { Vector2D, vec2 } from '../core/physics/Vector2D';
 import { soundManager } from '../audio/WebAudioSynth';
 import { useTheme } from '../theme/ThemeContext';
+import { globalEventBus } from '../core/engine/EventBus';
 
 interface ArenaCanvasProps {
   engine: SimulationEngine;
@@ -17,6 +18,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
   const dragCurrentRef = useRef<Vector2D | null>(null);
   const cursorGamePosRef = useRef<Vector2D | null>(null);
   const shockwavesRef = useRef<{ x: number; y: number; radius: number; alpha: number }[]>([]);
+  const screenShakeRef = useRef(0);
 
   // Convert game coordinates [-50..50, -50..50] to 1:1 square canvas pixels
   const toScreen = (gamePos: Vector2D, width: number, height: number): { x: number; y: number } => {
@@ -38,6 +40,12 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const unsubDamage = globalEventBus.on('DAMAGE_DEALT', (payload) => {
+      if (payload.targetId === engine.leftEntity.id) {
+        screenShakeRef.current = 7;
+      }
+    });
+
     let animId: number;
 
     const render = () => {
@@ -47,6 +55,14 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
       const width = canvas.width;
       const height = canvas.height;
       const isDark = theme === 'dark';
+
+      ctx.save();
+      if (screenShakeRef.current > 0.1) {
+        const sx = (Math.random() - 0.5) * screenShakeRef.current;
+        const sy = (Math.random() - 0.5) * screenShakeRef.current;
+        ctx.translate(sx, sy);
+        screenShakeRef.current *= 0.85;
+      }
 
       // 1. Clear background (Clean White Cartesian canvas or dark slate)
       ctx.fillStyle = isDark ? '#060b16' : '#FFFFFF';
@@ -347,6 +363,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
       ctx.strokeStyle = '#2B2D42';
       ctx.lineWidth = 2.5;
       ctx.strokeRect(1, 1, width - 2, height - 2);
+      ctx.restore();
 
       animId = requestAnimationFrame(render);
     };
@@ -549,7 +566,10 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
     };
 
     animId = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(animId);
+    return () => {
+      unsubDamage();
+      cancelAnimationFrame(animId);
+    };
   }, [engine, playerBadgeText, theme]);
 
   // Pointer Move (tracks cursor for aiming line)
