@@ -170,11 +170,13 @@ describe('SimulationEngine', () => {
     // Spheres must freeze while laser is in progress!
     expect(engine.isFrozen).toBe(true);
 
-    const initialPos = engine.leftEntity.position.clone();
-    // Advance slightly while frozen - position should NOT move
+    const initialEnemyPos = engine.rightEntity.position.clone();
+    const initialPlayerPos = engine.leftEntity.position.clone();
+    // Advance slightly while frozen - enemy should NOT move, but player continues moving freely
     engine.update(0.1);
-    expect(engine.leftEntity.position.x).toBe(initialPos.x);
-    expect(engine.leftEntity.position.y).toBe(initialPos.y);
+    expect(engine.rightEntity.position.x).toBe(initialEnemyPos.x);
+    expect(engine.rightEntity.position.y).toBe(initialEnemyPos.y);
+    expect(engine.leftEntity.position.x).not.toBe(initialPlayerPos.x);
 
     // Advance through telegraph (0.8s) so beam activates
     engine.update(0.8);

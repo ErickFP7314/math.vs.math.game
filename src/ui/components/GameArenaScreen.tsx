@@ -44,11 +44,18 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
     remainingHp: number;
     symbol: string;
   } | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const modalTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const loopRef = useRef<GameLoop | null>(null);
 
   useEffect(() => {
     soundManager.preloadAudio();
+    if (modalTimerRef.current) {
+      clearTimeout(modalTimerRef.current);
+      modalTimerRef.current = null;
+    }
+    setShowModal(false);
     const newEngine = new SimulationEngine(level);
     setEngine(newEngine);
     setMatchWinner(null);
@@ -74,6 +81,11 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
         remainingHp: payload.remainingHp,
         symbol: payload.symbol,
       });
+      setShowModal(false);
+      if (modalTimerRef.current) clearTimeout(modalTimerRef.current);
+      modalTimerRef.current = setTimeout(() => {
+        setShowModal(true);
+      }, 3000);
     });
 
     const unsubLaser = globalEventBus.on('LASER_FIRED', () => {
@@ -98,6 +110,10 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
     loop.start();
 
     return () => {
+      if (modalTimerRef.current) {
+        clearTimeout(modalTimerRef.current);
+        modalTimerRef.current = null;
+      }
       loop.stop();
       unsubCountdown();
       unsubStart();
@@ -107,6 +123,11 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   }, [levelId, restartKey, level]);
 
   const handleRestart = () => {
+    if (modalTimerRef.current) {
+      clearTimeout(modalTimerRef.current);
+      modalTimerRef.current = null;
+    }
+    setShowModal(false);
     setRestartKey((k) => k + 1);
   };
 
@@ -193,10 +214,11 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
 
         {/* Countdown Overlay (3, 2, 1) */}
         {countdown !== null && engine.status === 'COUNTDOWN' && (
-          <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center bg-black/35 backdrop-blur-[2px]">
+          <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center">
             <div
               key={countdown}
-              className="text-7xl font-black font-mono text-cyan-400 drop-shadow-[0_0_24px_rgba(0,172,193,0.9)] animate-pulse"
+              className="text-8xl font-black font-mono text-black select-none animate-pulse drop-shadow-[0_2px_12px_rgba(255,255,255,0.9)]"
+              style={{ WebkitTextStroke: '1px rgba(255,255,255,0.7)' }}
             >
               {countdown}
             </div>
@@ -214,8 +236,27 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
           activeSpheresCount={engine.subEntities.length + (engine.rightEntity.isDead ? 0 : 1)}
         />
 
-        {/* Victory / Defeat Modal */}
-        {matchWinner && (
+        {/* Floating Post-Match Winner Announcement (3s delay before modal, pure text, no window background) */}
+        {matchWinner && !showModal && (
+          <div className="absolute inset-0 z-30 pointer-events-none flex flex-col items-center justify-center px-4 select-none animate-fade-in">
+            <div
+              className={`text-5xl sm:text-6xl font-black font-mono tracking-tight drop-shadow-[0_4px_16px_rgba(0,0,0,0.85)] ${
+                matchWinner.winner === 'LEFT' ? 'text-cyan-400' : 'text-rose-500'
+              }`}
+            >
+              {matchWinner.winner === 'LEFT' ? t.victory : t.defeat}
+            </div>
+            <div className="text-2xl sm:text-3xl font-extrabold font-mono text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] mt-2 text-center">
+              {matchWinner.winner === 'LEFT' ? levelInfo.leftName : levelInfo.rightName} ({matchWinner.symbol})
+            </div>
+            <div className="text-lg sm:text-xl font-black font-mono text-amber-400 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] mt-1">
+              {t.remainingHp}: {Math.max(0, Math.round(matchWinner.remainingHp))}
+            </div>
+          </div>
+        )}
+
+        {/* Victory / Defeat Modal (appears after 3 seconds) */}
+        {matchWinner && showModal && (
           <VictoryModal
             winner={matchWinner.winner}
             winnerSymbol={matchWinner.symbol}

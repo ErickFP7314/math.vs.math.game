@@ -18,6 +18,7 @@ export interface ActiveLaser {
   damage: number;
   angle?: number;
   sectorSpan?: number;
+  hitEntityIds?: string[];
 }
 
 export interface PowerOrb {
@@ -87,12 +88,14 @@ export class SimulationEngine {
 
       if (this.countdownRemaining <= 0) {
         this.status = 'COMBAT';
+        this.randomizeEntityDirections();
         this.eventBus.emit('MATCH_START', { levelId: this.level.id });
       }
       return;
     }
 
-    if (this.status === 'COMBAT') {
+    // Keep running combat / kinematics even after match over so spheres bounce smoothly for the victory phase
+    if (this.status === 'COMBAT' || this.status === 'VICTORY' || this.status === 'DEFEAT') {
       this.updateCombat(dt);
     }
   }
@@ -102,13 +105,14 @@ export class SimulationEngine {
       (e) => !e.isDead
     );
 
-    // 1. Update cooldowns and status effects
+    // 1. Update cooldowns, status effects, and kinematics
     for (const entity of allEntities) {
       entity.updateCooldown(dt);
       this.updateEntityStatusEffects(entity, dt);
 
-      // Spheres stay completely still while lasers are active (isFrozen)
-      if (!this.isFrozen) {
+      // Enemy spheres freeze during laser beam, but player sphere (LEFT) keeps moving freely!
+      const isEntityFrozen = this.isFrozen && entity.team !== 'LEFT';
+      if (!isEntityFrozen) {
         // Move entity: p = p + v * dt
         entity.position = entity.position.add(entity.velocity.scale(dt));
 
@@ -117,17 +121,20 @@ export class SimulationEngine {
       }
     }
 
-    // 2. Resolve entity-entity elastic collisions & math rules (only when not frozen)
-    if (!this.isFrozen) {
-      for (let i = 0; i < allEntities.length; i++) {
-        for (let j = i + 1; j < allEntities.length; j++) {
-          const a = allEntities[i];
-          const b = allEntities[j];
+    // 2. Resolve entity-entity elastic collisions & math rules
+    for (let i = 0; i < allEntities.length; i++) {
+      for (let j = i + 1; j < allEntities.length; j++) {
+        const a = allEntities[i];
+        const b = allEntities[j];
 
-          // Check if collision is active
-          if (ElasticSolver.checkCollision(a, b)) {
-            this.handleMathCollision(a, b);
-          }
+        // Skip collisions between two frozen enemy spheres
+        if (this.isFrozen && a.team !== 'LEFT' && b.team !== 'LEFT') {
+          continue;
+        }
+
+        // Check if collision is active
+        if (ElasticSolver.checkCollision(a, b)) {
+          this.handleMathCollision(a, b);
         }
       }
     }
@@ -180,6 +187,11 @@ export class SimulationEngine {
   private handleMathCollision(a: BaseEntity, b: BaseEntity): void {
     // 1. Resolve elastic physics bounce first
     ElasticSolver.resolveCollision(a, b);
+
+    // If match is already decided, maintain physics bouncing only without additional damage
+    if (this.status === 'VICTORY' || this.status === 'DEFEAT') {
+      return;
+    }
 
     const collisionPos = a.position.add(b.position).scale(0.5);
     this.eventBus.emit('COLLISION', {
@@ -554,24 +566,38 @@ export class SimulationEngine {
           : (!this.leftEntity.isDead ? [this.leftEntity] : []);
 
         for (const target of targets) {
+          if (!laser.hitEntityIds) {
+            laser.hitEntityIds = [];
+          }
+          if (laser.hitEntityIds.includes(target.id)) {
+            continue; // Already hit this target in this blast
+          }
+
           let hit = false;
           if (laser.curveType === 'EXPONENTIAL') {
-            hit = Curves.intersectsExponential(target.position, target.radius, laser.sourcePos, -45, 45);
+            hit = Curves.intersectsExponential(target.position, target.radius, laser.sourcePos, -50, 50);
           } else if (laser.curveType === 'SECTOR') {
             hit = Curves.isInsideSector(
               target.position,
               laser.sourcePos,
-              30,
+              35,
               laser.angle || 0,
               laser.sectorSpan || Math.PI / 3
             );
-          } else {
-            // Check line/curve distance
-            const dist = target.position.distanceTo(laser.sourcePos);
-            hit = dist <= target.radius + 15;
+          } else if (laser.curveType === 'CUBIC') {
+            hit = Curves.intersectsCubic(target.position, target.radius, laser.sourcePos, -50, 50);
+          } else if (laser.curveType === 'PARABOLA') {
+            hit = Curves.intersectsParabola(target.position, target.radius, laser.sourcePos, -50, 50);
+          } else if (laser.curveType === 'LINEAR') {
+            hit = Curves.intersectsDiagonalLine(target.position, target.radius, laser.sourcePos, -50, 50);
+          } else if (laser.curveType === 'HORIZONTAL') {
+            hit = Curves.intersectsHorizontalLine(target.position, target.radius, laser.sourcePos.y, -50, 50);
+          } else if (laser.curveType === 'SINE' || laser.curveType === 'COSINE') {
+            hit = Curves.intersectsSine(target.position, target.radius, laser.sourcePos, -50, 50);
           }
 
           if (hit) {
+            laser.hitEntityIds.push(target.id);
             // Check reflection if target has REFLECT status or is 'i' in phase -1
             if (target.symbol === 'i' && (target.currentPhaseIndex === 1 || target.currentPhaseIndex === 2)) {
               // Reflect damage back to owner
@@ -895,6 +921,8 @@ export class SimulationEngine {
   }
 
   private checkMatchEnd(): void {
+    if (this.status !== 'COMBAT') return;
+
     // If the match has a global polynomial HP pool (e.g. Level 1)
     if (this.polyGlobalHp) {
       if (this.polyGlobalHp.current <= 0) {
@@ -936,6 +964,18 @@ export class SimulationEngine {
         remainingHp: this.leftEntity.hp,
         symbol: this.leftEntity.symbol,
       });
+    }
+  }
+
+  /**
+   * Randomize initial ball trajectories on match start
+   */
+  randomizeEntityDirections(): void {
+    const allEntities = [this.leftEntity, this.rightEntity, ...this.subEntities];
+    for (const entity of allEntities) {
+      const speed = entity.velocity.magnitude() || 25;
+      const angle = Math.random() * Math.PI * 2;
+      entity.velocity = vec2(Math.cos(angle) * speed, Math.sin(angle) * speed);
     }
   }
 }

@@ -261,6 +261,20 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
               if (gx === -50) ctx.moveTo(pt.x, pt.y);
               else ctx.lineTo(pt.x, pt.y);
             }
+          } else if (laser.curveType === 'LINEAR') {
+            // Diagonal line rotated 45 degrees (f(x) = x passing through sourcePos)
+            for (let gx = -50; gx <= 50; gx += 5) {
+              const gy = laser.sourcePos.y + (gx - laser.sourcePos.x);
+              const pt = toScreen(vec2(gx, gy), width, height);
+              if (gx === -50) ctx.moveTo(pt.x, pt.y);
+              else ctx.lineTo(pt.x, pt.y);
+            }
+          } else if (laser.curveType === 'HORIZONTAL') {
+            // Horizontal line (f(x) = 1 passing through sourcePos.y)
+            const ptStart = toScreen(vec2(-50, laser.sourcePos.y), width, height);
+            const ptEnd = toScreen(vec2(50, laser.sourcePos.y), width, height);
+            ctx.moveTo(ptStart.x, ptStart.y);
+            ctx.lineTo(ptEnd.x, ptEnd.y);
           } else {
             ctx.moveTo(0, p.y);
             ctx.lineTo(width, p.y);

@@ -89,4 +89,129 @@ export class Curves {
     let diff = (normAngle - normStart + 2 * Math.PI) % (2 * Math.PI);
     return diff <= spanAngle;
   }
+
+  /**
+   * Check if a circle intersects a horizontal line y = lineY
+   */
+  static intersectsHorizontalLine(
+    circleCenter: Vector2D,
+    radius: number,
+    lineY: number,
+    minX = -50,
+    maxX = 50
+  ): boolean {
+    if (Math.abs(circleCenter.y - lineY) > radius) {
+      return false;
+    }
+    return circleCenter.x >= minX - radius && circleCenter.x <= maxX + radius;
+  }
+
+  /**
+   * Check if a circle intersects a diagonal line (45 degrees, f(x) = x)
+   * Equation: y - y0 = x - x0  =>  x - y + (y0 - x0) = 0
+   */
+  static intersectsDiagonalLine(
+    circleCenter: Vector2D,
+    radius: number,
+    origin: Vector2D,
+    minX = -50,
+    maxX = 50
+  ): boolean {
+    const c = origin.y - origin.x;
+    const dist = Math.abs(circleCenter.x - circleCenter.y + c) / Math.SQRT2;
+    if (dist > radius) {
+      return false;
+    }
+    const xClosest = (circleCenter.x + circleCenter.y - c) / 2;
+    return xClosest >= minX - radius && xClosest <= maxX + radius;
+  }
+
+  /**
+   * Check if a circle intersects a parabola y - y0 = 8 * ((x - x0) * 0.1)^2
+   */
+  static intersectsParabola(
+    circleCenter: Vector2D,
+    radius: number,
+    origin: Vector2D,
+    minX = -50,
+    maxX = 50,
+    samples = 24
+  ): boolean {
+    const xStart = Math.max(minX, circleCenter.x - radius);
+    const xEnd = Math.min(maxX, circleCenter.x + radius);
+    if (xStart > xEnd) return false;
+
+    const step = (xEnd - xStart) / samples;
+    const rSq = radius * radius;
+
+    for (let i = 0; i <= samples; i++) {
+      const x = xStart + i * step;
+      const dx = (x - origin.x) * 0.1;
+      const y = origin.y + dx * dx * 8;
+      const distSq = (x - circleCenter.x) ** 2 + (y - circleCenter.y) ** 2;
+      if (distSq <= rSq) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check if a circle intersects a cubic curve y - y0 = 5 * ((x - x0) * 0.1)^3
+   */
+  static intersectsCubic(
+    circleCenter: Vector2D,
+    radius: number,
+    origin: Vector2D,
+    minX = -50,
+    maxX = 50,
+    samples = 24
+  ): boolean {
+    const xStart = Math.max(minX, circleCenter.x - radius);
+    const xEnd = Math.min(maxX, circleCenter.x + radius);
+    if (xStart > xEnd) return false;
+
+    const step = (xEnd - xStart) / samples;
+    const rSq = radius * radius;
+
+    for (let i = 0; i <= samples; i++) {
+      const x = xStart + i * step;
+      const dx = (x - origin.x) * 0.1;
+      const y = origin.y + dx * dx * dx * 5;
+      const distSq = (x - circleCenter.x) ** 2 + (y - circleCenter.y) ** 2;
+      if (distSq <= rSq) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check if a circle intersects a sine wave y - y0 = 12 * sin((x - x0) * 0.2)
+   */
+  static intersectsSine(
+    circleCenter: Vector2D,
+    radius: number,
+    origin: Vector2D,
+    minX = -50,
+    maxX = 50,
+    samples = 24
+  ): boolean {
+    const xStart = Math.max(minX, circleCenter.x - radius);
+    const xEnd = Math.min(maxX, circleCenter.x + radius);
+    if (xStart > xEnd) return false;
+
+    const step = (xEnd - xStart) / samples;
+    const rSq = radius * radius;
+
+    for (let i = 0; i <= samples; i++) {
+      const x = xStart + i * step;
+      const y = origin.y + Math.sin((x - origin.x) * 0.2) * 12;
+      const distSq = (x - circleCenter.x) ** 2 + (y - circleCenter.y) ** 2;
+      if (distSq <= rSq) {
+        return true;
+      }
+    }
+    return false;
+  }
 }
