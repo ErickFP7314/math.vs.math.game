@@ -54,27 +54,77 @@ export class WebAudioSynth {
     this.playCountdown(0);
   }
 
+  private laserAudioBuffer: AudioBuffer | null = null;
+  private isPreloading = false;
+
+  async preloadAudio(): Promise<void> {
+    if (this.laserAudioBuffer || this.isPreloading) return;
+    this.isPreloading = true;
+    try {
+      const ctx = this.initCtx();
+      const res = await fetch('/audio/laser_beam.mp3');
+      if (res.ok) {
+        const arrayBuf = await res.arrayBuffer();
+        this.laserAudioBuffer = await ctx.decodeAudioData(arrayBuf);
+      }
+    } catch {
+      // Audio fetch may fail in headless tests; procedural synth is used as fallback
+    } finally {
+      this.isPreloading = false;
+    }
+  }
+
   /**
-   * Sharp laser/cut sound
+   * Sharp laser/beam sound (authentic audio from 1.mp4)
    */
   playLaser(): void {
     if (this.isMuted) return;
     const ctx = this.initCtx();
+
+    if (this.laserAudioBuffer) {
+      try {
+        const source = ctx.createBufferSource();
+        source.buffer = this.laserAudioBuffer;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.35, ctx.currentTime);
+        source.connect(gain);
+        gain.connect(ctx.destination);
+        source.start(0);
+        return;
+      } catch {
+        // Fallback to synth if buffer playback encounters issue
+      }
+    }
+
+    // Try HTML Audio element as immediate fallback if buffer not ready yet
+    try {
+      if (typeof window !== 'undefined' && typeof Audio !== 'undefined') {
+        const audio = new Audio('/audio/laser_beam.mp3');
+        audio.volume = 0.35;
+        audio.play().catch(() => {});
+        this.preloadAudio();
+        return;
+      }
+    } catch {
+      // Ignore and proceed to synth
+    }
+
+    // Procedural synthesized laser sound fallback
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(900, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.25);
+    osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.3);
 
     gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
 
     osc.connect(gain);
     gain.connect(ctx.destination);
 
     osc.start();
-    osc.stop(ctx.currentTime + 0.25);
+    osc.stop(ctx.currentTime + 0.3);
   }
 
   /**

@@ -49,6 +49,8 @@ export class SimulationEngine {
   eventBus: EventBus;
   laserIdCounter = 0;
   orbSpawnTimer = 5.0;
+  enemyShootTimer = 3.0;
+  isFrozen = false;
 
   constructor(level: LevelDefinition, eventBus = globalEventBus) {
     this.level = level;
@@ -105,22 +107,27 @@ export class SimulationEngine {
       entity.updateCooldown(dt);
       this.updateEntityStatusEffects(entity, dt);
 
-      // Move entity: p = p + v * dt
-      entity.position = entity.position.add(entity.velocity.scale(dt));
+      // Spheres stay completely still while lasers are active (isFrozen)
+      if (!this.isFrozen) {
+        // Move entity: p = p + v * dt
+        entity.position = entity.position.add(entity.velocity.scale(dt));
 
-      // Boundary bounce
-      ElasticSolver.resolveBoundary(entity, this.level.arenaBounds);
+        // Boundary bounce
+        ElasticSolver.resolveBoundary(entity, this.level.arenaBounds);
+      }
     }
 
-    // 2. Resolve entity-entity elastic collisions & math rules
-    for (let i = 0; i < allEntities.length; i++) {
-      for (let j = i + 1; j < allEntities.length; j++) {
-        const a = allEntities[i];
-        const b = allEntities[j];
+    // 2. Resolve entity-entity elastic collisions & math rules (only when not frozen)
+    if (!this.isFrozen) {
+      for (let i = 0; i < allEntities.length; i++) {
+        for (let j = i + 1; j < allEntities.length; j++) {
+          const a = allEntities[i];
+          const b = allEntities[j];
 
-        // Check if collision is active
-        if (ElasticSolver.checkCollision(a, b)) {
-          this.handleMathCollision(a, b);
+          // Check if collision is active
+          if (ElasticSolver.checkCollision(a, b)) {
+            this.handleMathCollision(a, b);
+          }
         }
       }
     }
@@ -531,6 +538,11 @@ export class SimulationEngine {
         laser.telegraphTime -= dt;
         if (laser.telegraphTime <= 0) {
           laser.isTelegraph = false; // Becomes active damaging beam
+          this.eventBus.emit('LASER_FIRED', {
+            laserId: laser.id,
+            ownerId: laser.ownerId,
+            curveType: laser.curveType,
+          });
         }
       } else {
         laser.durationRemaining -= dt;
@@ -598,6 +610,9 @@ export class SimulationEngine {
         }
       }
     }
+
+    // Freeze spheres in place while any laser curve/beam is active
+    this.isFrozen = this.activeLasers.length > 0;
   }
 
   private updateOrbs(dt: number): void {
@@ -644,22 +659,52 @@ export class SimulationEngine {
     }
   }
 
-  private updateAI(_dt: number): void {
-    const ai = this.rightEntity;
-    if (ai.isDead || !ai.isReady()) return;
+  private addLaser(laser: ActiveLaser): void {
+    this.activeLasers.push(laser);
+    this.isFrozen = true;
+    if (!laser.isTelegraph) {
+      this.eventBus.emit('LASER_FIRED', {
+        laserId: laser.id,
+        ownerId: laser.ownerId,
+        curveType: laser.curveType,
+      });
+    }
+  }
 
-    // AI skill trigger heuristic
-    if (this.level.id === 1) {
+  private updateAI(dt: number): void {
+    // Enemy automated attack every 3 seconds
+    this.enemyShootTimer -= dt;
+    if (this.enemyShootTimer <= 0) {
+      this.enemyShootTimer = 3.0;
+      this.triggerEnemyAttack();
+    }
+  }
+
+  private triggerEnemyAttack(): void {
+    if (!this.rightEntity.isDead) {
+      this.rightEntity.cooldownRemaining = 0;
       this.triggerSkill('RIGHT');
-    } else if (this.level.id === 2 || this.level.id === 4 || this.level.id === 5 || this.level.id === 6 || this.level.id === 8) {
-      const dist = ai.position.distanceTo(this.leftEntity.position);
-      if (dist < 40) {
-        this.triggerSkill('RIGHT');
+      return;
+    }
+
+    // If main right entity is dead (e.g. polynomial split into x^2 balls), active sub-entities fire
+    const activeSub = this.subEntities.filter((s) => !s.isDead);
+    if (activeSub.length > 0) {
+      this.laserIdCounter++;
+      for (const sub of activeSub) {
+        const curve = sub.symbol === 'x²' ? 'PARABOLA' : sub.symbol === 'x' ? 'LINEAR' : 'HORIZONTAL';
+        this.addLaser({
+          id: `laser_${this.laserIdCounter}_${sub.id}`,
+          ownerId: sub.id,
+          sourcePos: sub.position.clone(),
+          curveType: curve,
+          isTelegraph: true,
+          telegraphTime: 0.8,
+          durationRemaining: 1.2,
+          damage: sub.symbol === 'x²' ? 23 : 18,
+        });
       }
-    } else if (this.level.id === 7) {
-      this.triggerSkill('RIGHT');
-    } else {
-      this.triggerSkill('RIGHT');
+      this.eventBus.emit('SKILL_ACTIVATED', { entityId: activeSub[0].id, skillName: 'Polynomial Barrage!' });
     }
   }
 
@@ -676,7 +721,7 @@ export class SimulationEngine {
     // 1. Differential Operator d/dx (Player skill)
     if (entity.symbol === 'd/dx') {
       this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: "d/dx Tangent Slash!" });
-      this.activeLasers.push({
+      this.addLaser({
         id: `laser_${this.laserIdCounter}`,
         ownerId: entity.id,
         sourcePos: entity.position.clone(),
@@ -697,7 +742,7 @@ export class SimulationEngine {
     // 2. Partial Derivative ∂/∂y
     if (entity.symbol === '∂/∂y') {
       this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: "∂/∂y Multivariable Slice!" });
-      this.activeLasers.push({
+      this.addLaser({
         id: `laser_${this.laserIdCounter}`,
         ownerId: entity.id,
         sourcePos: entity.position.clone(),
@@ -718,7 +763,7 @@ export class SimulationEngine {
     // 3. Integral Operator ∫
     if (entity.symbol === '∫') {
       this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: '∫ Riemann Wave!' });
-      this.activeLasers.push({
+      this.addLaser({
         id: `laser_${this.laserIdCounter}`,
         ownerId: entity.id,
         sourcePos: entity.position.clone(),
@@ -741,7 +786,7 @@ export class SimulationEngine {
     // 4. Transcendental Pi π
     if (entity.symbol === 'π') {
       this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: 'π Sector Slice!' });
-      this.activeLasers.push({
+      this.addLaser({
         id: `laser_${this.laserIdCounter}`,
         ownerId: entity.id,
         sourcePos: entity.position.clone(),
@@ -759,7 +804,7 @@ export class SimulationEngine {
     // 5. Exponential e^x
     if (entity.symbol === 'eˣ' || entity.symbol === 'eˣʸ') {
       this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: 'Exponential Blade!' });
-      this.activeLasers.push({
+      this.addLaser({
         id: `laser_${this.laserIdCounter}`,
         ownerId: entity.id,
         sourcePos: entity.position.clone(),
@@ -776,7 +821,7 @@ export class SimulationEngine {
     if (entity.symbol === 'sin x' || entity.symbol === 'cos x') {
       const skillName = entity.symbol === 'sin x' ? 'Sine Wave!' : 'Cosine Wave!';
       this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName });
-      this.activeLasers.push({
+      this.addLaser({
         id: `laser_${this.laserIdCounter}`,
         ownerId: entity.id,
         sourcePos: entity.position.clone(),
@@ -792,7 +837,7 @@ export class SimulationEngine {
     // 7. Polynomial Team Invocations
     if (entity.symbol === 'x³' || (entity.team === 'RIGHT' && this.level.id === 1)) {
       this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: 'Graph Invocation!' });
-      this.activeLasers.push({
+      this.addLaser({
         id: `laser_${this.laserIdCounter}`,
         ownerId: entity.id,
         sourcePos: entity.position.clone(),
@@ -803,7 +848,7 @@ export class SimulationEngine {
         damage: 23,
       });
       for (const sub of this.subEntities) {
-        this.activeLasers.push({
+        this.addLaser({
           id: `laser_${this.laserIdCounter}_${sub.id}`,
           ownerId: entity.id,
           sourcePos: sub.position.clone(),
@@ -819,7 +864,7 @@ export class SimulationEngine {
 
     // 8. General fallback skill
     this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName: `${entity.symbol} Pulse!` });
-    this.activeLasers.push({
+    this.addLaser({
       id: `laser_${this.laserIdCounter}`,
       ownerId: entity.id,
       sourcePos: entity.position.clone(),

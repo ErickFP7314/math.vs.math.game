@@ -10,7 +10,8 @@ export type GameEventType =
   | 'SKILL_READY'
   | 'ORB_COLLECTED'
   | 'SPAWN_ENTITY'
-  | 'DESPAWN_ENTITY';
+  | 'DESPAWN_ENTITY'
+  | 'LASER_FIRED';
 
 export interface GameEventPayloads {
   MATCH_START: { levelId: number };
@@ -25,6 +26,7 @@ export interface GameEventPayloads {
   ORB_COLLECTED: { entityId: string; orbType: string };
   SPAWN_ENTITY: { entityId: string };
   DESPAWN_ENTITY: { entityId: string };
+  LASER_FIRED: { laserId: string; ownerId: string; curveType: string };
 }
 
 type EventCallback<T extends GameEventType> = (payload: GameEventPayloads[T]) => void;

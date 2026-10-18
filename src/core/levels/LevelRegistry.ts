@@ -20,7 +20,7 @@ export class LevelRegistry {
       return this.cachedLevels;
     }
 
-    const defaultBounds = { minX: -45, maxX: 45, minY: -75, maxY: 75 };
+    const defaultBounds = { minX: -50, maxX: 50, minY: -50, maxY: 50 };
 
     this.cachedLevels = [
       {

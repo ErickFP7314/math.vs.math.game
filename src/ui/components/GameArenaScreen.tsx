@@ -11,7 +11,7 @@ import { HPBar } from './HPBar';
 import { ArenaCanvas } from '../../render/ArenaCanvas';
 import { FloatingMathText } from './FloatingMathText';
 import { VictoryModal } from './VictoryModal';
-import { Volume2, VolumeX, RotateCcw, ArrowLeft, Zap, Sun, Moon } from 'lucide-react';
+import { Volume2, VolumeX, RotateCcw, ArrowLeft, Sun, Moon } from 'lucide-react';
 
 interface GameArenaScreenProps {
   levelId: number;
@@ -48,6 +48,7 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   const loopRef = useRef<GameLoop | null>(null);
 
   useEffect(() => {
+    soundManager.preloadAudio();
     const newEngine = new SimulationEngine(level);
     setEngine(newEngine);
     setMatchWinner(null);
@@ -75,6 +76,10 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
       });
     });
 
+    const unsubLaser = globalEventBus.on('LASER_FIRED', () => {
+      soundManager.playLaser();
+    });
+
     // Start fixed 60Hz game loop
     let frameCounter = 0;
     const loop = new GameLoop(
@@ -92,22 +97,12 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
     loopRef.current = loop;
     loop.start();
 
-    // Spacebar shortcut for skill
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        newEngine.triggerSkill('LEFT');
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-
     return () => {
       loop.stop();
-      window.removeEventListener('keydown', handleKeyDown);
       unsubCountdown();
       unsubStart();
       unsubOver();
+      unsubLaser();
     };
   }, [levelId, restartKey, level]);
 
@@ -123,12 +118,6 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
     const muted = soundManager.toggleMute();
     setIsMuted(muted);
   };
-
-  const triggerPlayerSkill = () => {
-    engine.triggerSkill('LEFT');
-  };
-
-  const canUseSkill = engine.leftEntity.isReady() && engine.status === 'COMBAT';
 
   return (
     <div className="w-full h-full max-h-[96vh] flex flex-col items-center justify-between p-1 sm:p-2 relative max-w-md mx-auto">
@@ -224,38 +213,6 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
           polyHp={engine.polyGlobalHp}
           activeSpheresCount={engine.subEntities.length + (engine.rightEntity.isDead ? 0 : 1)}
         />
-
-        {/* Skill Action Button & Controls Guide (Guaranteed visible) */}
-        <div
-          className={`p-2 sm:p-2.5 border-t flex items-center justify-between transition-colors duration-200 ${
-            isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'
-          }`}
-        >
-          <div
-            className={`text-[10px] sm:text-[11px] font-mono leading-tight ${
-              isDark ? 'text-slate-400' : 'text-slate-600'
-            }`}
-          >
-            💡 {t.controlsTip}
-          </div>
-
-          <button
-            onClick={triggerPlayerSkill}
-            disabled={!canUseSkill}
-            className={`px-3 py-1.5 rounded-xl font-mono text-xs font-bold flex items-center space-x-1.5 shadow-md transition-all active:scale-95 whitespace-nowrap ml-2 ${
-              canUseSkill
-                ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-cyan-500/25 animate-pulse cursor-pointer'
-                : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
-            }`}
-          >
-            <Zap className="w-3.5 h-3.5 fill-current" />
-            <span>
-              {canUseSkill
-                ? t.skillReady
-                : `${t.recharging} (${Math.ceil(engine.leftEntity.cooldownRemaining)}s)`}
-            </span>
-          </button>
-        </div>
 
         {/* Victory / Defeat Modal */}
         {matchWinner && (

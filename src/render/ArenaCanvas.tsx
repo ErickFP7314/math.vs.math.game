@@ -18,20 +18,20 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
   const cursorGamePosRef = useRef<Vector2D | null>(null);
   const shockwavesRef = useRef<{ x: number; y: number; radius: number; alpha: number }[]>([]);
 
-  // Convert game coordinates [-45..45, -75..75] to canvas pixels
+  // Convert game coordinates [-50..50, -50..50] to 1:1 square canvas pixels
   const toScreen = (gamePos: Vector2D, width: number, height: number): { x: number; y: number } => {
-    const scaleX = width / 90;
-    const scaleY = height / 150;
+    const scaleX = width / 100;
+    const scaleY = height / 100;
     return {
-      x: (gamePos.x + 45) * scaleX,
-      y: (75 - gamePos.y) * scaleY, // invert Y for standard screen coordinates
+      x: (gamePos.x + 50) * scaleX,
+      y: (50 - gamePos.y) * scaleY, // invert Y for standard Cartesian screen coordinates
     };
   };
 
   const toGame = (screenX: number, screenY: number, width: number, height: number): Vector2D => {
-    const scaleX = 90 / width;
-    const scaleY = 150 / height;
-    return vec2(screenX * scaleX - 45, 75 - screenY * scaleY);
+    const scaleX = 100 / width;
+    const scaleY = 100 / height;
+    return vec2(screenX * scaleX - 50, 50 - screenY * scaleY);
   };
 
   useEffect(() => {
@@ -48,35 +48,34 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
       const height = canvas.height;
       const isDark = theme === 'dark';
 
-      // 1. Clear background (Dark blueprint or Clean White Cartesian paper)
+      // 1. Clear background (Clean White Cartesian canvas or dark slate)
       ctx.fillStyle = isDark ? '#060b16' : '#FFFFFF';
       ctx.fillRect(0, 0, width, height);
 
-      // 2. Draw Cartesian Grid (thicker, clearly visible lines)
-      ctx.lineWidth = 1.6;
-      ctx.strokeStyle = isDark ? 'rgba(30, 41, 59, 0.85)' : '#cbd5e1';
+      // 2. Draw subtle Cartesian subgrid lines
+      ctx.lineWidth = 1.0;
+      ctx.strokeStyle = isDark ? 'rgba(30, 41, 59, 0.6)' : '#F1F5F9';
 
-      const divisionsX = 10;
-      const divisionsY = 16;
-      for (let i = 0; i <= divisionsX; i++) {
-        const x = (i / divisionsX) * width;
+      const divisions = 20; // 5-unit subdivisions
+      for (let i = 0; i <= divisions; i++) {
+        const x = (i / divisions) * width;
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, height);
         ctx.stroke();
       }
-      for (let j = 0; j <= divisionsY; j++) {
-        const y = (j / divisionsY) * height;
+      for (let j = 0; j <= divisions; j++) {
+        const y = (j / divisions) * height;
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(width, y);
         ctx.stroke();
       }
 
-      // Main X and Y Axes with ticks (Prominent and thick)
+      // Main X and Y Axes with ticks crossing at center (0, 0)
       const origin = toScreen(vec2(0, 0), width, height);
-      ctx.strokeStyle = isDark ? '#64748b' : '#334155';
-      ctx.lineWidth = 3.2;
+      ctx.strokeStyle = isDark ? '#64748B' : '#94A3B8';
+      ctx.lineWidth = 1.5;
 
       // X Axis
       ctx.beginPath();
@@ -90,28 +89,56 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
       ctx.lineTo(origin.x, height);
       ctx.stroke();
 
-      // Graduation ticks on Axes
-      ctx.strokeStyle = isDark ? '#94a3b8' : '#1e293b';
-      ctx.lineWidth = 2.0;
-      for (let i = 0; i <= divisionsX; i++) {
-        const tx = (i / divisionsX) * width;
+      // Graduation ticks on Axes (every 10 units)
+      ctx.strokeStyle = isDark ? '#94A3B8' : '#94A3B8';
+      ctx.lineWidth = 1.5;
+      const tickStep = 10;
+      for (let g = -40; g <= 40; g += tickStep) {
+        if (g === 0) continue;
+        // X ticks
+        const tx = toScreen(vec2(g, 0), width, height).x;
         ctx.beginPath();
-        ctx.moveTo(tx, origin.y - 4);
-        ctx.lineTo(tx, origin.y + 4);
+        ctx.moveTo(tx, origin.y - 3.5);
+        ctx.lineTo(tx, origin.y + 3.5);
         ctx.stroke();
-      }
-      for (let j = 0; j <= divisionsY; j++) {
-        const ty = (j / divisionsY) * height;
+
+        // Y ticks
+        const ty = toScreen(vec2(0, g), width, height).y;
         ctx.beginPath();
-        ctx.moveTo(origin.x - 4, ty);
-        ctx.lineTo(origin.x + 4, ty);
+        ctx.moveTo(origin.x - 3.5, ty);
+        ctx.lineTo(origin.x + 3.5, ty);
         ctx.stroke();
       }
 
+      // Arrow on positive Y Axis (pointing Up)
+      ctx.fillStyle = isDark ? '#94A3B8' : '#94A3B8';
+      ctx.beginPath();
+      ctx.moveTo(origin.x, 3);
+      ctx.lineTo(origin.x - 3.5, 11);
+      ctx.lineTo(origin.x + 3.5, 11);
+      ctx.closePath();
+      ctx.fill();
+
+      // Label 'y' near top of Y Axis
+      ctx.font = 'italic 16px "KaTeX_Math", "Times New Roman", serif';
+      ctx.fillStyle = isDark ? '#94A3B8' : '#94A3B8';
+      ctx.fillText('y', origin.x - 13, 14);
+
+      // Arrow on positive X Axis (pointing Right)
+      ctx.beginPath();
+      ctx.moveTo(width - 3, origin.y);
+      ctx.lineTo(width - 11, origin.y - 3.5);
+      ctx.lineTo(width - 11, origin.y + 3.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Label 'x' near right of X Axis
+      ctx.fillText('x', width - 12, origin.y + 16);
+
       // Origin text 'O'
-      ctx.font = 'bold 13px "KaTeX_Main", "Times New Roman", serif';
-      ctx.fillStyle = isDark ? '#94a3b8' : '#475569';
-      ctx.fillText('O', origin.x + 6, origin.y + 14);
+      ctx.font = 'italic 14px "KaTeX_Math", "Times New Roman", serif';
+      ctx.fillStyle = isDark ? '#64748B' : '#CBD5E1';
+      ctx.fillText('O', origin.x - 12, origin.y + 13);
 
       // 3. Draw Shockwaves (from click/impulse)
       for (let s = shockwavesRef.current.length - 1; s >= 0; s--) {
@@ -219,19 +246,19 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
           }
 
           if (laser.curveType === 'CUBIC') {
-            for (let gx = -45; gx <= 45; gx += 2) {
+            for (let gx = -50; gx <= 50; gx += 2) {
               const dx = (gx - laser.sourcePos.x) * 0.1;
               const gy = laser.sourcePos.y + dx * dx * dx * 5;
               const pt = toScreen(vec2(gx, gy), width, height);
-              if (gx === -45) ctx.moveTo(pt.x, pt.y);
+              if (gx === -50) ctx.moveTo(pt.x, pt.y);
               else ctx.lineTo(pt.x, pt.y);
             }
           } else if (laser.curveType === 'PARABOLA') {
-            for (let gx = -45; gx <= 45; gx += 2) {
+            for (let gx = -50; gx <= 50; gx += 2) {
               const dx = (gx - laser.sourcePos.x) * 0.1;
               const gy = laser.sourcePos.y + dx * dx * 8;
               const pt = toScreen(vec2(gx, gy), width, height);
-              if (gx === -45) ctx.moveTo(pt.x, pt.y);
+              if (gx === -50) ctx.moveTo(pt.x, pt.y);
               else ctx.lineTo(pt.x, pt.y);
             }
           } else {
@@ -252,17 +279,16 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
         drawEntity(ctx, entity, width, height);
       }
 
-      // 7. Draw Player Crosshair & Aiming Guide Line (UX Enhancement)
+      // 7. Draw Player Aiming Guide Line (UX Enhancement for Touch & Click)
       const playerEntity = engine.leftEntity;
       if (!playerEntity.isDead && engine.status === 'COMBAT') {
         const playerScreen = toScreen(playerEntity.position, width, height);
 
-        // A. Draw aiming laser towards cursor if within bounds
         if (cursorGamePosRef.current) {
           const cursorScreen = toScreen(cursorGamePosRef.current, width, height);
           ctx.save();
           ctx.setLineDash([4, 4]);
-          ctx.strokeStyle = 'rgba(0, 172, 193, 0.5)';
+          ctx.strokeStyle = 'rgba(0, 168, 232, 0.45)';
           ctx.lineWidth = 1.5;
           ctx.beginPath();
           ctx.moveTo(playerScreen.x, playerScreen.y);
@@ -271,41 +297,12 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
 
           // Target crosshair at cursor
           ctx.setLineDash([]);
-          ctx.strokeStyle = '#00ACC1';
+          ctx.strokeStyle = '#00A8E8';
           ctx.beginPath();
-          ctx.arc(cursorScreen.x, cursorScreen.y, 6, 0, Math.PI * 2);
+          ctx.arc(cursorScreen.x, cursorScreen.y, 5, 0, Math.PI * 2);
           ctx.stroke();
           ctx.restore();
         }
-
-        // B. Distinct Player Indicator / Target Reticle around Player Sphere
-        const r = playerEntity.radius * (width / 90);
-        ctx.save();
-        const spin = Date.now() * 0.002;
-        ctx.strokeStyle = '#00ACC1';
-        ctx.lineWidth = 2;
-        ctx.shadowColor = '#00ACC1';
-        ctx.shadowBlur = 8;
-
-        // Rotating targeting brackets
-        ctx.beginPath();
-        ctx.arc(playerScreen.x, playerScreen.y, r + 7, spin, spin + Math.PI * 0.6);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(playerScreen.x, playerScreen.y, r + 7, spin + Math.PI, spin + Math.PI * 1.6);
-        ctx.stroke();
-
-        // Player badge tag above player ball
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = '#00838F';
-        ctx.fillRect(playerScreen.x - 18, playerScreen.y - r - 17, 36, 12);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 9px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(playerBadgeText, playerScreen.x, playerScreen.y - r - 11);
-        ctx.restore();
       }
 
       // 8. Draw Player Drag Arrow (Slingshot Drag)
@@ -316,25 +313,25 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
         const curr = toScreen(dragCurrent, width, height);
 
         ctx.save();
-        ctx.strokeStyle = '#00ACC1';
-        ctx.lineWidth = 3;
-        ctx.shadowColor = '#00ACC1';
+        ctx.strokeStyle = '#00A8E8';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#00A8E8';
         ctx.shadowBlur = 8;
         ctx.beginPath();
         ctx.moveTo(start.x, start.y);
         ctx.lineTo(curr.x, curr.y);
         ctx.stroke();
 
-        ctx.fillStyle = '#00ACC1';
+        ctx.fillStyle = '#00A8E8';
         ctx.beginPath();
-        ctx.arc(curr.x, curr.y, 5, 0, Math.PI * 2);
+        ctx.arc(curr.x, curr.y, 4, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
 
-      // Border of arena (#333333)
-      ctx.strokeStyle = '#333333';
-      ctx.lineWidth = 3;
+      // Outer border of arena (#2B2D42, 2.5px width)
+      ctx.strokeStyle = '#2B2D42';
+      ctx.lineWidth = 2.5;
       ctx.strokeRect(1, 1, width - 2, height - 2);
 
       animId = requestAnimationFrame(render);
@@ -347,7 +344,38 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
       height: number
     ) => {
       const p = toScreen(entity.position, width, height);
-      const r = entity.radius * (width / 90);
+      const r = entity.radius * (width / 100);
+      const isLeft = entity.team === 'LEFT';
+      const isDark = theme === 'dark';
+
+      // 1. Motion Trail (straight vector line trailing behind the moving sphere)
+      const velMag = Math.hypot(entity.velocity.x, entity.velocity.y);
+      if (velMag > 1.5) {
+        const normX = entity.velocity.x / velMag;
+        const normY = entity.velocity.y / velMag;
+        const screenVx = normX;
+        const screenVy = -normY;
+        const trailLen = Math.min(55, Math.max(25, velMag * 1.6));
+
+        const trailGrad = ctx.createLinearGradient(
+          p.x,
+          p.y,
+          p.x - screenVx * trailLen,
+          p.y - screenVy * trailLen
+        );
+        const baseColor = isLeft ? '0, 168, 232' : '249, 115, 22';
+        trailGrad.addColorStop(0, `rgba(${baseColor}, 0.55)`);
+        trailGrad.addColorStop(1, `rgba(${baseColor}, 0)`);
+
+        ctx.save();
+        ctx.strokeStyle = trailGrad;
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - screenVx * trailLen, p.y - screenVy * trailLen);
+        ctx.stroke();
+        ctx.restore();
+      }
 
       ctx.save();
 
@@ -427,11 +455,21 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
         ctx.fillText('∫', ox, oy);
       }
 
-      // Main Entity Glow & Body
-      ctx.shadowColor = entity.color;
-      ctx.shadowBlur = entity.symbol === 'i' && entity.currentPhaseIndex === 0 ? 4 : 12;
-      ctx.fillStyle = entity.bgColor;
-      ctx.strokeStyle = entity.color;
+      // 2. Soft Glowing Halo radiating around the sphere
+      const haloColor = isLeft ? '0, 168, 232' : '249, 115, 22';
+      const halo = ctx.createRadialGradient(p.x, p.y, r * 0.6, p.x, p.y, r * 1.9);
+      halo.addColorStop(0, `rgba(${haloColor}, 0.38)`);
+      halo.addColorStop(1, `rgba(${haloColor}, 0)`);
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * 1.9, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Main Entity Body
+      ctx.fillStyle = isLeft
+        ? (isDark ? 'rgba(0, 168, 232, 0.2)' : '#F0FBFD')
+        : (isDark ? 'rgba(249, 115, 22, 0.2)' : '#FFF8F3');
+      ctx.strokeStyle = isLeft ? '#00A8E8' : '#F97316';
       ctx.lineWidth = 2.5;
 
       // Ghost transparency for phase i
@@ -444,19 +482,54 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
       ctx.fill();
       ctx.stroke();
 
-      // Entity Symbol Inside Sphere (LaTeX Math Typography)
+      // 4. Mathematical LaTeX typography inside sphere
       ctx.globalAlpha = 1.0;
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = '#0f172a';
-      const fontSize = Math.max(12, Math.round(r * 0.95));
-      if (entity.symbol.includes('d/dx') || entity.symbol.includes('∂/∂y')) {
-        ctx.font = `bold ${fontSize}px "KaTeX_Main", "Times New Roman", serif`;
+      if (entity.symbol === 'd/dx') {
+        const textColor = isDark ? '#38BDF8' : '#007A99';
+        ctx.fillStyle = textColor;
+        ctx.font = 'italic bold 12px "KaTeX_Math", "Times New Roman", serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('d', p.x, p.y - 7);
+
+        ctx.strokeStyle = textColor;
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(p.x - 8, p.y - 1);
+        ctx.lineTo(p.x + 8, p.y - 1);
+        ctx.stroke();
+
+        ctx.font = 'italic bold 11px "KaTeX_Math", "Times New Roman", serif';
+        ctx.fillText('dx', p.x, p.y + 7);
+      } else if (entity.symbol === 'x³') {
+        ctx.fillStyle = isDark ? '#FB923C' : '#C2410C';
+        ctx.font = 'italic bold 16px "KaTeX_Math", "Times New Roman", serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('x', p.x - 3, p.y + 1);
+        ctx.font = 'bold 11px monospace';
+        ctx.fillText('3', p.x + 7, p.y - 5);
+      } else if (entity.symbol === 'x²') {
+        ctx.fillStyle = isDark ? '#FB923C' : '#C2410C';
+        ctx.font = 'italic bold 16px "KaTeX_Math", "Times New Roman", serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('x', p.x - 3, p.y + 1);
+        ctx.font = 'bold 11px monospace';
+        ctx.fillText('2', p.x + 7, p.y - 5);
+      } else if (entity.symbol === 'x') {
+        ctx.fillStyle = isDark ? '#FB923C' : '#C2410C';
+        ctx.font = 'italic bold 16px "KaTeX_Math", "Times New Roman", serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('x', p.x, p.y);
       } else {
-        ctx.font = `italic 700 ${fontSize}px "KaTeX_Math", "KaTeX_Main", "STIX Two Math", "Cambria Math", "Times New Roman", serif`;
+        ctx.fillStyle = isLeft ? (isDark ? '#38BDF8' : '#007A99') : (isDark ? '#FB923C' : '#C2410C');
+        ctx.font = 'italic bold 14px "KaTeX_Math", "Times New Roman", serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(entity.symbol, p.x, p.y);
       }
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(entity.symbol, p.x, p.y);
 
       ctx.restore();
     };
@@ -537,19 +610,19 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
 
   return (
     <div
-      className={`relative w-full max-w-[360px] sm:max-w-[380px] aspect-[9/16] max-h-[50vh] sm:max-h-[54vh] mx-auto shadow-2xl rounded-xl overflow-hidden border transition-colors duration-200 ${
-        theme === 'dark' ? 'border-slate-800 bg-[#060b16]' : 'border-slate-300 bg-white'
+      className={`relative w-full max-w-[380px] sm:max-w-[400px] aspect-square mx-auto border-[2.5px] border-[#2B2D42] overflow-hidden select-none transition-colors duration-200 ${
+        theme === 'dark' ? 'bg-[#060b16]' : 'bg-white'
       }`}
     >
       <canvas
         ref={canvasRef}
-        width={360}
-        height={600}
+        width={400}
+        height={400}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
         onPointerUp={handlePointerUp}
-        className="w-full h-full cursor-crosshair touch-none"
+        className="w-full h-full cursor-crosshair touch-none block"
       />
     </div>
   );

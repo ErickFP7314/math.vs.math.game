@@ -146,4 +146,43 @@ describe('SimulationEngine', () => {
 
     expect(engine.rightEntity.hp).toBeLessThan(initialEnemyHp);
   });
+
+  it('triggers automated enemy attack every 3 seconds and freezes spheres during laser', () => {
+    const testBus = new EventBus();
+    let laserFiredEventReceived = false;
+    testBus.on('LASER_FIRED', () => {
+      laserFiredEventReceived = true;
+    });
+
+    const level1 = LevelRegistry.getLevel(1)!;
+    const engine = new SimulationEngine(level1, testBus);
+
+    // Skip countdown
+    engine.update(3.1);
+    expect(engine.status).toBe('COMBAT');
+    expect(engine.isFrozen).toBe(false);
+
+    // Advance 3.0 seconds into combat
+    engine.update(3.0);
+
+    // Laser was created by enemy auto-attack
+    expect(engine.activeLasers.length).toBeGreaterThan(0);
+    // Spheres must freeze while laser is in progress!
+    expect(engine.isFrozen).toBe(true);
+
+    const initialPos = engine.leftEntity.position.clone();
+    // Advance slightly while frozen - position should NOT move
+    engine.update(0.1);
+    expect(engine.leftEntity.position.x).toBe(initialPos.x);
+    expect(engine.leftEntity.position.y).toBe(initialPos.y);
+
+    // Advance through telegraph (0.8s) so beam activates
+    engine.update(0.8);
+    expect(laserFiredEventReceived).toBe(true);
+
+    // Advance past laser remaining duration (1.2s)
+    engine.update(1.5);
+    // Once laser finishes, spheres must unfreeze
+    expect(engine.isFrozen).toBe(false);
+  });
 });

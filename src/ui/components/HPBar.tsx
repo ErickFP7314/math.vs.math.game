@@ -70,53 +70,51 @@ export const HPBar: React.FC<HPBarProps> = ({
 
   return (
     <div
-      className={`w-full max-w-[420px] mx-auto px-3 py-2 border-t font-mono select-none transition-colors duration-200 ${
-        isDark ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-50 border-slate-200'
+      className={`w-full max-w-[400px] mx-auto px-1 pt-2 pb-1 font-mono select-none transition-colors duration-200 ${
+        isDark ? 'bg-slate-950' : 'bg-white'
       }`}
     >
       <div className="grid grid-cols-2 gap-3 items-center">
-        {/* Left Health Bar */}
-        <div className="flex flex-col space-y-1">
-          <div className="flex justify-between items-center text-xs">
-            <span className="font-bold text-cyan-400">{leftEntity.symbol}</span>
-            <span className={`text-[11px] font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+        {/* Left Health Bar (Cyan) */}
+        <div className="flex flex-col">
+          <div
+            className={`w-full h-6 rounded-[2px] overflow-hidden border relative flex items-center justify-center ${
+              isDark ? 'bg-slate-800 border-cyan-800' : 'bg-slate-100 border-[#0090C8]'
+            }`}
+          >
+            {/* Fill proportion */}
+            <div
+              className="absolute left-0 top-0 bottom-0 bg-[#00A8E8] transition-all duration-150 ease-out"
+              style={{ width: `${leftPercent}%` }}
+            />
+            {/* Text centered inside the bar */}
+            <span className="relative z-10 text-xs font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
               {leftEntity.hp} / {leftEntity.maxHp}
             </span>
           </div>
-          <div
-            className={`w-full h-3 rounded-full overflow-hidden border relative ${
-              isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-200 border-slate-300'
-            }`}
-          >
-            <div
-              className="h-full bg-cyan-500 transition-all duration-150 ease-out shadow-sm"
-              style={{ width: `${leftPercent}%` }}
-            />
-          </div>
-          <div className="text-[10px] text-cyan-400 font-bold truncate">
+          <div className="text-[11px] font-bold text-[#64748B] mt-1 pl-0.5 tracking-tight">
             {getLeftBadge()}
           </div>
         </div>
 
-        {/* Right Health Bar */}
-        <div className="flex flex-col space-y-1 text-right">
-          <div className="flex justify-between items-center text-xs flex-row-reverse">
-            <span className="font-bold text-orange-400">{rightEntity.symbol}</span>
-            <span className={`text-[11px] font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+        {/* Right Health Bar (Orange) */}
+        <div className="flex flex-col text-right">
+          <div
+            className={`w-full h-6 rounded-[2px] overflow-hidden border relative flex items-center justify-center ${
+              isDark ? 'bg-slate-800 border-orange-800' : 'bg-slate-100 border-[#EA580C]'
+            }`}
+          >
+            {/* Fill proportion */}
+            <div
+              className="absolute right-0 top-0 bottom-0 bg-[#F97316] transition-all duration-150 ease-out"
+              style={{ width: `${rightPercent}%` }}
+            />
+            {/* Text centered inside the bar */}
+            <span className="relative z-10 text-xs font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
               {rightHp} / {rightMaxHp}
             </span>
           </div>
-          <div
-            className={`w-full h-3 rounded-full overflow-hidden border relative ${
-              isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-200 border-slate-300'
-            }`}
-          >
-            <div
-              className="h-full bg-orange-500 transition-all duration-150 ease-out shadow-sm ml-auto"
-              style={{ width: `${rightPercent}%` }}
-            />
-          </div>
-          <div className="text-[10px] text-orange-400 font-bold truncate">
+          <div className="text-[11px] font-bold text-[#64748B] mt-1 pr-0.5 tracking-tight">
             {getRightBadge()}
           </div>
         </div>
