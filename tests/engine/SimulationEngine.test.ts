@@ -3,6 +3,7 @@ import { SimulationEngine } from '../../src/core/engine/SimulationEngine';
 import { LevelRegistry } from '../../src/core/levels/LevelRegistry';
 import { EventBus } from '../../src/core/engine/EventBus';
 import { vec2 } from '../../src/core/physics/Vector2D';
+import { BaseEntity } from '../../src/core/entities/BaseEntity';
 
 describe('SimulationEngine', () => {
   it('starts in countdown state and transitions to combat', () => {
@@ -89,7 +90,7 @@ describe('SimulationEngine', () => {
     expect(engine.status).toBe('VICTORY');
   });
 
-  it('differentiates x^2 sub-entities into 2x on subsequent collision', () => {
+  it('differentiates x^2 sub-entities into 2x on subsequent collision after 3s invulnerability', () => {
     const testBus = new EventBus();
     const level1 = LevelRegistry.getLevel(1)!;
     const engine = new SimulationEngine(level1, testBus);
@@ -103,12 +104,23 @@ describe('SimulationEngine', () => {
     expect(engine.subEntities.length).toBe(3);
     const x2Ball = engine.subEntities[0];
     expect(x2Ball.symbol).toBe('x²');
+    expect(x2Ball.isInvulnerable()).toBe(true);
 
     // Move other sub-entities away to avoid multiple overlaps in single tick
     engine.subEntities[1].position = vec2(40, 40);
     engine.subEntities[2].position = vec2(-40, -40);
 
-    // Second collision: d/dx with single x^2 sub-entity
+    // While invulnerable during the first 3 seconds, collision does NOT damage/differentiate it
+    x2Ball.position = vec2(0, 0);
+    engine.leftEntity.position = vec2(0, 0);
+    engine.update(1 / 60);
+    expect(engine.subEntities.length).toBe(3); // Still 3, immune!
+
+    // Advance 3.1 seconds so spawn invulnerability timer expires
+    engine.update(3.1);
+    expect(x2Ball.isInvulnerable()).toBe(false);
+
+    // Now collision differentiates single x^2 into two x balls
     x2Ball.position = vec2(0, 0);
     engine.leftEntity.position = vec2(0, 0);
     engine.update(1 / 60);
@@ -261,5 +273,123 @@ describe('SimulationEngine', () => {
     expect(damagePayload.targetId).toBe(engine.leftEntity.id);
     expect(damagePayload.amount).toBe(18);
     expect(damagePayload.position).toBeDefined();
+  });
+
+  it('emits simplified math result texts in Level 1 (3x^2, 2x, 1, 0) instead of full equation', () => {
+    const testBus = new EventBus();
+    const emittedFormulas: string[] = [];
+    testBus.on('MATH_FORMULA', (payload) => {
+      emittedFormulas.push(payload.latex);
+    });
+
+    const level1 = LevelRegistry.getLevel(1)!;
+    const engine = new SimulationEngine(level1, testBus);
+
+    engine.update(3.1);
+
+    // Strike x^3 -> should emit '3x^2'
+    engine.leftEntity.position = engine.rightEntity.position.clone();
+    engine.update(1 / 60);
+    expect(emittedFormulas).toContain('3x^2');
+    expect(emittedFormulas.some((f) => f.includes('\\frac{d}{dx}'))).toBe(false);
+
+    // Advance 3.1s so x^2 becomes vulnerable
+    engine.update(3.1);
+
+    // Isolate one x^2 and collide
+    const x2 = engine.subEntities[0];
+    x2.position = vec2(0, 0);
+    engine.leftEntity.position = vec2(0, 0);
+    engine.subEntities[1].position = vec2(40, 40);
+    engine.subEntities[2].position = vec2(-40, -40);
+    engine.update(1 / 60);
+
+    // Should emit '2x'
+    expect(emittedFormulas).toContain('2x');
+
+    // Advance 3.1s so x becomes vulnerable
+    engine.update(3.1);
+
+    // Isolate an 'x' sub-entity and collide -> turns into 1
+    const xEntity = engine.subEntities.find((e) => e.symbol === 'x')!;
+    xEntity.position = vec2(0, 0);
+    engine.leftEntity.position = vec2(0, 0);
+    engine.update(1 / 60);
+
+    // Should emit '1'
+    expect(emittedFormulas).toContain('1');
+
+    // Advance 3.1s so '1' becomes vulnerable
+    engine.update(3.1);
+
+    // Collide with '1' -> turns into 0
+    const oneEntity = engine.subEntities.find((e) => e.symbol === '1')!;
+    oneEntity.position = vec2(0, 0);
+    engine.leftEntity.position = vec2(0, 0);
+    engine.update(1 / 60);
+
+    // Should emit '0'
+    expect(emittedFormulas).toContain('0');
+  });
+
+  it('selectively interrupts only the laser of the collided enemy sphere while others keep firing', () => {
+    const level1 = LevelRegistry.getLevel(1)!;
+    const engine = new SimulationEngine(level1);
+
+    engine.update(3.1);
+
+    // Spawn 2 sub-entities manually
+    engine.rightEntity.isDead = true;
+    const subA = new BaseEntity({
+      id: 'sub_A',
+      name: 'x²',
+      symbol: 'x²',
+      team: 'SUB_ENTITY',
+      color: '#FB8C00',
+      bgColor: '#FFE0B2',
+      hp: 1,
+      maxHp: 1,
+      radius: 6,
+      mass: 1.0,
+      position: vec2(10, 0),
+      velocity: vec2(0, 0),
+    });
+    const subB = new BaseEntity({
+      id: 'sub_B',
+      name: 'x²',
+      symbol: 'x²',
+      team: 'SUB_ENTITY',
+      color: '#FB8C00',
+      bgColor: '#FFE0B2',
+      hp: 1,
+      maxHp: 1,
+      radius: 6,
+      mass: 1.0,
+      position: vec2(-10, 0),
+      velocity: vec2(0, 0),
+    });
+    subA.invulnerabilityTimer = 0;
+    subB.invulnerabilityTimer = 0;
+    engine.subEntities = [subA, subB];
+
+    // Trigger enemy attack (Polynomial Barrage) -> both subA and subB add lasers
+    engine.enemyShootTimer = 0;
+    engine.update(0.016);
+
+    expect(engine.activeLasers.length).toBe(2);
+    expect(engine.frozenOwnerIds.has('sub_A')).toBe(true);
+    expect(engine.frozenOwnerIds.has('sub_B')).toBe(true);
+
+    // Player collides ONLY with subA
+    engine.leftEntity.position = subA.position.clone();
+    engine.update(0.016);
+
+    // subA's laser should be interrupted and removed
+    expect(engine.activeLasers.some((l) => l.ownerId === 'sub_A')).toBe(false);
+    expect(engine.frozenOwnerIds.has('sub_A')).toBe(false);
+
+    // subB's laser MUST still be active and subB remains frozen!
+    expect(engine.activeLasers.some((l) => l.ownerId === 'sub_B')).toBe(true);
+    expect(engine.frozenOwnerIds.has('sub_B')).toBe(true);
   });
 });

@@ -49,6 +49,7 @@ export class BaseEntity implements PhysicalCircle {
   statusEffects: StatusEffect[] = [];
   isImmuneToDerivative = false;
   isDead = false;
+  invulnerabilityTimer = 0; // seconds remaining of spawn invulnerability & blinking
 
   // Additional entity-specific dynamic properties
   tag = '';
@@ -80,7 +81,7 @@ export class BaseEntity implements PhysicalCircle {
   }
 
   takeDamage(amount: number): number {
-    if (this.hasStatus('SHIELD') || this.isImmuneToDerivative && amount <= 0) {
+    if (this.isInvulnerable() || this.hasStatus('SHIELD') || (this.isImmuneToDerivative && amount <= 0)) {
       return 0;
     }
 
@@ -121,6 +122,13 @@ export class BaseEntity implements PhysicalCircle {
     if (this.cooldownRemaining > 0) {
       this.cooldownRemaining = Math.max(0, this.cooldownRemaining - dt);
     }
+    if (this.invulnerabilityTimer > 0) {
+      this.invulnerabilityTimer = Math.max(0, this.invulnerabilityTimer - dt);
+    }
+  }
+
+  isInvulnerable(): boolean {
+    return this.invulnerabilityTimer > 0;
   }
 
   resetCooldown(): void {
@@ -148,6 +156,7 @@ export class BaseEntity implements PhysicalCircle {
       cooldownMax: this.cooldownMax,
     });
     copy.cooldownRemaining = this.cooldownRemaining;
+    copy.invulnerabilityTimer = this.invulnerabilityTimer;
     copy.statusEffects = this.statusEffects.map((s) => ({ ...s }));
     copy.isImmuneToDerivative = this.isImmuneToDerivative;
     copy.isDead = this.isDead;

@@ -486,7 +486,13 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
         ctx.fillText('∫', ox, oy);
       }
 
+      // Visual blinking during invulnerability period (Requirement 2)
+      const isInvulnerable = entity.invulnerabilityTimer > 0;
+      const blinkAlpha = isInvulnerable ? (Math.floor(Date.now() / 85) % 2 === 0 ? 0.2 : 0.95) : 1.0;
+
       // 2. Soft Glowing Halo radiating around the sphere
+      ctx.save();
+      ctx.globalAlpha = blinkAlpha;
       const haloColor = isLeft ? '0, 168, 232' : '249, 115, 22';
       const halo = ctx.createRadialGradient(p.x, p.y, r * 0.6, p.x, p.y, r * 1.9);
       halo.addColorStop(0, `rgba(${haloColor}, 0.38)`);
@@ -495,6 +501,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
       ctx.beginPath();
       ctx.arc(p.x, p.y, r * 1.9, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
 
       // 3. Main Entity Body
       ctx.fillStyle = isLeft
@@ -505,7 +512,9 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
 
       // Ghost transparency for phase i
       if (entity.symbol === 'i' && (entity.currentPhaseIndex === 0 || entity.currentPhaseIndex === 2)) {
-        ctx.globalAlpha = 0.6;
+        ctx.globalAlpha = 0.6 * blinkAlpha;
+      } else {
+        ctx.globalAlpha = blinkAlpha;
       }
 
       ctx.beginPath();
@@ -514,7 +523,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
       ctx.stroke();
 
       // 4. Mathematical LaTeX typography inside sphere
-      ctx.globalAlpha = 1.0;
+      ctx.globalAlpha = blinkAlpha;
       if (entity.symbol === 'd/dx') {
         const textColor = isDark ? '#38BDF8' : '#007A99';
         ctx.fillStyle = textColor;

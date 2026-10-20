@@ -51,7 +51,12 @@ export class SimulationEngine {
   laserIdCounter = 0;
   orbSpawnTimer = 5.0;
   enemyShootTimer = 3.0;
-  isFrozen = false;
+  frozenOwnerIds: Set<string> = new Set();
+
+  /** Backward-compatible getter: true when any laser is active */
+  get isFrozen(): boolean {
+    return this.frozenOwnerIds.size > 0;
+  }
 
   constructor(level: LevelDefinition, eventBus = globalEventBus) {
     this.level = level;
@@ -110,8 +115,8 @@ export class SimulationEngine {
       entity.updateCooldown(dt);
       this.updateEntityStatusEffects(entity, dt);
 
-      // Enemy spheres freeze during laser beam, but player sphere (LEFT) keeps moving freely!
-      const isEntityFrozen = this.isFrozen && entity.team !== 'LEFT';
+      // Enemy spheres freeze only if THEY own an active laser; player (LEFT) always moves freely!
+      const isEntityFrozen = entity.team !== 'LEFT' && this.isEntityFrozen(entity);
       if (!isEntityFrozen) {
         // Move entity: p = p + v * dt
         entity.position = entity.position.add(entity.velocity.scale(dt));
@@ -128,7 +133,7 @@ export class SimulationEngine {
         const b = allEntities[j];
 
         // Skip collisions between two frozen enemy spheres
-        if (this.isFrozen && a.team !== 'LEFT' && b.team !== 'LEFT') {
+        if (a.team !== 'LEFT' && b.team !== 'LEFT' && this.isEntityFrozen(a) && this.isEntityFrozen(b)) {
           continue;
         }
 
@@ -212,12 +217,18 @@ export class SimulationEngine {
     const player = isPlayerA ? a : b;
     const enemy = isPlayerA ? b : a;
 
-    // Interrupt enemy laser if hit by player (Requirement 0.3)
-    const hadEnemyLaser = this.activeLasers.some((l) => l.ownerId !== player.id);
+    // Requirement 2: While blinking / invulnerable, child spheres are immune to player hits
+    // (no damage to anyone, no message displayed, just normal elastic physics bouncing)
+    if (enemy.isInvulnerable() || player.isInvulnerable()) {
+      return;
+    }
+
+    // Interrupt only the specific enemy's laser when player strikes it (not all enemy lasers)
+    const hadEnemyLaser = this.activeLasers.some((l) => l.ownerId === enemy.id);
     if (hadEnemyLaser) {
-      this.activeLasers = this.activeLasers.filter((l) => l.ownerId === player.id);
-      this.isFrozen = this.activeLasers.length > 0;
-      this.enemyShootTimer = 3.0; // Reset shoot timer after interruption
+      this.activeLasers = this.activeLasers.filter((l) => l.ownerId !== enemy.id);
+      this.frozenOwnerIds.delete(enemy.id);
+      this.recalcFrozenOwners();
     }
 
     // Handle Imaginary Unit phase intangible check
@@ -452,7 +463,7 @@ export class SimulationEngine {
     if (sphere.symbol === 'x³') {
       sphere.isDead = true;
       this.eventBus.emit('MATH_FORMULA', {
-        latex: '\\frac{d}{dx}(x^3) = 3x^2',
+        latex: '3x^2',
         position: { x: pos.x, y: pos.y },
         color: '#00ACC1',
       });
@@ -475,12 +486,13 @@ export class SimulationEngine {
           position: sphere.position.add(offset),
           velocity: dir.scale(blastSpeed + (k === 1 ? 4 : 0)),
         });
+        sub.invulnerabilityTimer = 3.0; // 3 seconds invulnerability & blinking
         this.subEntities.push(sub);
       }
     } else if (sphere.symbol === 'x²') {
       sphere.isDead = true;
       this.eventBus.emit('MATH_FORMULA', {
-        latex: '\\frac{d}{dx}(x^2) = 2x',
+        latex: '2x',
         position: { x: pos.x, y: pos.y },
         color: '#00ACC1',
       });
@@ -503,6 +515,7 @@ export class SimulationEngine {
           position: sphere.position.add(offset),
           velocity: dir.scale(blastSpeed * 1.1),
         });
+        sub.invulnerabilityTimer = 3.0; // 3 seconds invulnerability & blinking
         this.subEntities.push(sub);
       }
     } else if (sphere.symbol === 'x') {
@@ -510,17 +523,18 @@ export class SimulationEngine {
       sphere.name = '1';
       sphere.radius = 3.6;
       sphere.color = '#FFD54F';
+      sphere.invulnerabilityTimer = 3.0; // 3 seconds invulnerability & blinking
       // Push the transformed sphere 1 away from player
       sphere.velocity = blastDir.scale(blastSpeed);
       this.eventBus.emit('MATH_FORMULA', {
-        latex: '\\frac{d}{dx}(x) = 1',
+        latex: '1',
         position: { x: pos.x, y: pos.y },
         color: '#00ACC1',
       });
     } else if (sphere.symbol === '1') {
       sphere.isDead = true;
       this.eventBus.emit('MATH_FORMULA', {
-        latex: '\\frac{d}{dx}(1) = 0',
+        latex: '0',
         position: { x: pos.x, y: pos.y },
         color: '#00ACC1',
       });
@@ -593,6 +607,9 @@ export class SimulationEngine {
           : (!this.leftEntity.isDead ? [this.leftEntity] : []);
 
         for (const target of targets) {
+          if (target.isInvulnerable()) {
+            continue;
+          }
           if (!laser.hitEntityIds) {
             laser.hitEntityIds = [];
           }
@@ -664,8 +681,8 @@ export class SimulationEngine {
       }
     }
 
-    // Freeze spheres in place while any laser curve/beam is active
-    this.isFrozen = this.activeLasers.length > 0;
+    // Recalculate which entities are frozen based on remaining active lasers
+    this.recalcFrozenOwners();
   }
 
   private updateOrbs(dt: number): void {
@@ -714,7 +731,7 @@ export class SimulationEngine {
 
   private addLaser(laser: ActiveLaser): void {
     this.activeLasers.push(laser);
-    this.isFrozen = true;
+    this.frozenOwnerIds.add(laser.ownerId);
     if (!laser.isTelegraph) {
       this.eventBus.emit('LASER_FIRED', {
         laserId: laser.id,
@@ -903,7 +920,7 @@ export class SimulationEngine {
       for (const sub of this.subEntities) {
         this.addLaser({
           id: `laser_${this.laserIdCounter}_${sub.id}`,
-          ownerId: entity.id,
+          ownerId: sub.id,
           sourcePos: sub.position.clone(),
           curveType: sub.symbol === 'x²' ? 'PARABOLA' : sub.symbol === 'x' ? 'LINEAR' : 'HORIZONTAL',
           isTelegraph: true,
@@ -1003,6 +1020,23 @@ export class SimulationEngine {
       const speed = entity.velocity.magnitude() || 25;
       const angle = Math.random() * Math.PI * 2;
       entity.velocity = vec2(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    }
+  }
+
+  /**
+   * Check if a specific entity is frozen (it owns an active laser)
+   */
+  private isEntityFrozen(entity: BaseEntity): boolean {
+    return this.frozenOwnerIds.has(entity.id);
+  }
+
+  /**
+   * Recalculate the frozenOwnerIds set from the current active lasers
+   */
+  private recalcFrozenOwners(): void {
+    this.frozenOwnerIds.clear();
+    for (const laser of this.activeLasers) {
+      this.frozenOwnerIds.add(laser.ownerId);
     }
   }
 }
