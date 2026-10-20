@@ -3,13 +3,17 @@ import { LevelRegistry } from '../../core/levels/LevelRegistry';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme/ThemeContext';
 import { LanguageSelector } from './LanguageSelector';
-import { Play, Sun, Moon } from 'lucide-react';
+import { Play, Sun, Moon, BookOpen } from 'lucide-react';
 
 interface LevelSelectScreenProps {
   onSelectLevel: (levelId: number) => void;
+  onViewMathGuide?: (levelId?: number) => void;
 }
 
-export const LevelSelectScreen: React.FC<LevelSelectScreenProps> = ({ onSelectLevel }) => {
+export const LevelSelectScreen: React.FC<LevelSelectScreenProps> = ({
+  onSelectLevel,
+  onViewMathGuide,
+}) => {
   const levels = LevelRegistry.getLevels();
   const { t } = useLanguage();
   const { theme, toggleTheme } = useTheme();
@@ -29,7 +33,22 @@ export const LevelSelectScreen: React.FC<LevelSelectScreenProps> = ({ onSelectLe
           </span>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          {onViewMathGuide && (
+            <button
+              onClick={() => onViewMathGuide()}
+              className={`px-3 py-2 rounded-xl transition-all border flex items-center space-x-1.5 text-xs font-mono font-bold ${
+                isDark
+                  ? 'bg-slate-900 border-slate-700 text-cyan-400 hover:bg-slate-800 hover:border-cyan-500/50'
+                  : 'bg-white border-slate-300 text-cyan-600 hover:bg-slate-50 shadow-sm'
+              }`}
+              title={t.mathGuide}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{t.mathGuide}</span>
+            </button>
+          )}
+
           <button
             onClick={toggleTheme}
             className={`p-2 rounded-xl transition-all border ${
@@ -120,8 +139,23 @@ export const LevelSelectScreen: React.FC<LevelSelectScreenProps> = ({ onSelectLe
                   <span className="w-2.5 h-2.5 rounded-full bg-orange-400" />
                   <span>{lvl.rightEntityConfig.symbol}</span>
                 </div>
-                <div className="w-9 h-9 rounded-xl bg-cyan-500/10 group-hover:bg-cyan-500 group-hover:text-white text-cyan-400 flex items-center justify-center transition-all shadow-sm">
-                  <Play className="w-4 h-4 fill-current" />
+                <div className="flex items-center space-x-2">
+                  {onViewMathGuide && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewMathGuide(lvl.id);
+                      }}
+                      className="w-9 h-9 rounded-xl bg-slate-800/40 hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-400 border border-slate-700/50 flex items-center justify-center transition-all"
+                      title={t.mathGuide}
+                    >
+                      <BookOpen className="w-4 h-4" />
+                    </button>
+                  )}
+                  <div className="w-9 h-9 rounded-xl bg-cyan-500/10 group-hover:bg-cyan-500 group-hover:text-white text-cyan-400 flex items-center justify-center transition-all shadow-sm">
+                    <Play className="w-4 h-4 fill-current" />
+                  </div>
                 </div>
               </div>
             </div>

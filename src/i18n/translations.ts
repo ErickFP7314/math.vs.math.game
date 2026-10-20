@@ -44,6 +44,12 @@ export interface Translations {
   phaseMinusI: string;
   phase1: string;
   fight: string;
+  mathGuide: string;
+  theoryTitle: string;
+  interactiveDemo: string;
+  playLevel: string;
+  formulaBreakdown: string;
+  gameplayConnection: string;
   levels: Record<number, LevelTranslation>;
 }
 
@@ -82,6 +88,12 @@ export const translations: Record<Language, Translations> = {
     phaseMinusI: '-i (Pierce+Reflect)',
     phase1: '1 (Normal)',
     fight: 'Fight!',
+    mathGuide: 'Math Theory & Guide',
+    theoryTitle: 'Didactic Math Explanation',
+    interactiveDemo: 'Interactive Simulation',
+    playLevel: 'Play This Level',
+    formulaBreakdown: 'Calculus Breakdown',
+    gameplayConnection: 'Gameplay Mechanics Connection',
     levels: {
       1: {
         title: 'Differential Operator vs. Polynomial',
@@ -209,6 +221,12 @@ export const translations: Record<Language, Translations> = {
     phaseMinusI: '-i (Perforación+Reflexión)',
     phase1: '1 (Normal)',
     fight: '¡Pelea!',
+    mathGuide: 'Teoría Matemática',
+    theoryTitle: 'Explicación Matemática Didáctica',
+    interactiveDemo: 'Simulación Interactiva',
+    playLevel: 'Jugar este Nivel',
+    formulaBreakdown: 'Fundamentos de Cálculo',
+    gameplayConnection: 'Conexión con las Mecánicas del Juego',
     levels: {
       1: {
         title: 'Operador Diferencial vs. Polinomio',
@@ -336,6 +354,12 @@ export const translations: Record<Language, Translations> = {
     phaseMinusI: '-i (관통+반사)',
     phase1: '1 (일반)',
     fight: '파이트!',
+    mathGuide: '수학 이론 및 가이드',
+    theoryTitle: '학습용 수학 설명',
+    interactiveDemo: '인터랙티브 시뮬레이션',
+    playLevel: '이 레벨 플레이',
+    formulaBreakdown: '미적분 원리 분석',
+    gameplayConnection: '게임플레이 메커니즘 연계',
     levels: {
       1: {
         title: '미분 연산자 vs. 다항함수',

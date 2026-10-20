@@ -89,7 +89,7 @@ export const FloatingMathText: React.FC = () => {
           className={`absolute select-none font-black italic tracking-wide text-center whitespace-nowrap ${
             item.isDamage
               ? 'text-4xl sm:text-5xl font-mono text-red-500 animate-damage-float'
-              : 'text-2xl sm:text-3xl animate-onomatopoeia'
+              : 'text-4xl sm:text-5xl md:text-6xl [&_.katex]:text-4xl sm:[&_.katex]:text-5xl md:[&_.katex]:text-6xl animate-onomatopoeia font-black'
           }`}
           style={{
             left: `${item.xPercent}%`,

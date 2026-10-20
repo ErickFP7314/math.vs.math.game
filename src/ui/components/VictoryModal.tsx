@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { soundManager } from '../../audio/WebAudioSynth';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { RotateCcw, ArrowRight, Grid } from 'lucide-react';
+import { RotateCcw, ArrowRight, Grid, BookOpen } from 'lucide-react';
 
 interface VictoryModalProps {
   winner: 'LEFT' | 'RIGHT' | null;
@@ -11,6 +11,7 @@ interface VictoryModalProps {
   onRestart: () => void;
   onNextLevel: () => void;
   onSelectLevel: () => void;
+  onViewMathInfo?: () => void;
   hasNextLevel: boolean;
 }
 
@@ -22,6 +23,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   onRestart,
   onNextLevel,
   onSelectLevel,
+  onViewMathInfo,
   hasNextLevel,
 }) => {
   const { t } = useLanguage();
@@ -33,8 +35,8 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   const isLeftWinner = winner === 'LEFT';
 
   return (
-    <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm z-30 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-slate-900 border-2 border-slate-700 rounded-2xl p-6 shadow-2xl text-center flex flex-col items-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+    <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-md z-30 flex items-center justify-center p-4 animate-modal-backdrop">
+      <div className="w-full max-w-sm bg-slate-900 border-2 border-slate-700 rounded-2xl p-6 shadow-2xl text-center flex flex-col items-center space-y-4 animate-modal-pop">
         <div>
           <h2
             className="text-2xl font-black font-mono tracking-tight"
@@ -69,6 +71,16 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
             <RotateCcw className="w-4 h-4" />
             <span>{t.retry}</span>
           </button>
+
+          {onViewMathInfo && (
+            <button
+              onClick={onViewMathInfo}
+              className="w-full py-2.5 px-4 rounded-xl font-bold font-mono text-sm bg-slate-800/70 hover:bg-slate-700 text-cyan-400 border border-cyan-800/50 flex items-center justify-center space-x-2 transition-all active:scale-95"
+            >
+              <BookOpen className="w-4 h-4 text-cyan-400" />
+              <span>{t.mathGuide}</span>
+            </button>
+          )}
 
           <button
             onClick={onSelectLevel}

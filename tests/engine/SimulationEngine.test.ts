@@ -35,6 +35,8 @@ describe('SimulationEngine', () => {
     // x^3 should break into 3 balls of x^2, and global HP should drop
     expect(engine.subEntities.length).toBe(3);
     expect(engine.rightEntity.hp).toBe(15);
+    // Player (derivative) must NOT take contact damage in Level 1
+    expect(engine.leftEntity.hp).toBe(100);
     // CRITICAL: The match must NOT end prematurely when x^3 splits!
     expect(engine.status).toBe('COMBAT');
   });
@@ -206,6 +208,11 @@ describe('SimulationEngine', () => {
 
     // Enter combat and advance until enemy attacks
     engine.update(3.1);
+    // Keep entities separated while waiting for enemy attack to avoid random collision
+    engine.leftEntity.position = vec2(-40, 0);
+    engine.leftEntity.velocity = vec2(0, 0);
+    engine.rightEntity.position = vec2(40, 0);
+    engine.rightEntity.velocity = vec2(0, 0);
     engine.update(3.0);
     expect(engine.activeLasers.length).toBeGreaterThan(0);
     expect(engine.isFrozen).toBe(true);
@@ -391,5 +398,46 @@ describe('SimulationEngine', () => {
     // subB's laser MUST still be active and subB remains frozen!
     expect(engine.activeLasers.some((l) => l.ownerId === 'sub_B')).toBe(true);
     expect(engine.frozenOwnerIds.has('sub_B')).toBe(true);
+  });
+
+  it('ensures player takes zero contact damage in Level 1 against polynomial spheres while taking laser damage', () => {
+    const testBus = new EventBus();
+    const level1 = LevelRegistry.getLevel(1)!;
+    const engine = new SimulationEngine(level1, testBus);
+
+    engine.update(3.1); // enter combat
+
+    const initialHp = engine.leftEntity.hp; // 100
+
+    // Collision with x^3
+    engine.leftEntity.position = engine.rightEntity.position.clone();
+    engine.update(1 / 60);
+
+    // Player HP must stay exactly at initialHp (no contact damage)
+    expect(engine.leftEntity.hp).toBe(initialHp);
+
+    // Now simulate laser damage to player
+    engine.leftEntity.takeDamage(18);
+    expect(engine.leftEntity.hp).toBe(initialHp - 18);
+  });
+
+  it('stops AI decision loop and sphere kinematics when status is PAUSED', () => {
+    const level1 = LevelRegistry.getLevel(1)!;
+    const engine = new SimulationEngine(level1);
+
+    engine.update(3.1);
+    expect(engine.status).toBe('COMBAT');
+
+    // Pause simulation (as done when victory/defeat modal is displayed)
+    engine.status = 'PAUSED';
+    const initialTimer = engine.enemyShootTimer;
+    const initialPlayerPos = engine.leftEntity.position.clone();
+
+    engine.update(1.0);
+
+    // Position and AI timer should remain unchanged because updateCombat is not executed
+    expect(engine.enemyShootTimer).toBe(initialTimer);
+    expect(engine.leftEntity.position.x).toBe(initialPlayerPos.x);
+    expect(engine.leftEntity.position.y).toBe(initialPlayerPos.y);
   });
 });

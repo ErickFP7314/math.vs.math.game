@@ -11,18 +11,20 @@ import { HPBar } from './HPBar';
 import { ArenaCanvas } from '../../render/ArenaCanvas';
 import { FloatingMathText } from './FloatingMathText';
 import { VictoryModal } from './VictoryModal';
-import { Volume2, VolumeX, RotateCcw, ArrowLeft, Sun, Moon } from 'lucide-react';
+import { Volume2, VolumeX, RotateCcw, ArrowLeft, Sun, Moon, BookOpen } from 'lucide-react';
 
 interface GameArenaScreenProps {
   levelId: number;
   onBackToMenu: () => void;
   onSelectNextLevel: (nextLevelId: number) => void;
+  onViewMathInfo?: (levelId: number) => void;
 }
 
 export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   levelId,
   onBackToMenu,
   onSelectNextLevel,
+  onViewMathInfo,
 }) => {
   const { t } = useLanguage();
   const { theme, toggleTheme } = useTheme();
@@ -93,6 +95,8 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
       setShowModal(false);
       if (modalTimerRef.current) clearTimeout(modalTimerRef.current);
       modalTimerRef.current = setTimeout(() => {
+        newEngine.status = 'PAUSED';
+        loopRef.current?.stop();
         setShowModal(true);
       }, 3000);
     });
@@ -182,6 +186,17 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
+          {/* Math didactic guide button */}
+          {onViewMathInfo && (
+            <button
+              onClick={() => onViewMathInfo(levelId)}
+              className="p-1 hover:text-cyan-400 transition-colors"
+              title={t.mathGuide}
+            >
+              <BookOpen className="w-4 h-4 text-cyan-400" />
+            </button>
+          )}
+
           {/* Theme toggle button */}
           <button
             onClick={toggleTheme}
@@ -291,6 +306,7 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
             onRestart={handleRestart}
             onNextLevel={handleNext}
             onSelectLevel={onBackToMenu}
+            onViewMathInfo={onViewMathInfo ? () => onViewMathInfo(levelId) : undefined}
             hasNextLevel={levelId < 10}
           />
         )}

@@ -155,8 +155,10 @@ export class SimulationEngine {
       this.updateOrbs(dt);
     }
 
-    // 6. AI decision loop for the opponent (Right entity)
-    this.updateAI(dt);
+    // 6. AI decision loop for the opponent - only while match is actively in COMBAT
+    if (this.status === 'COMBAT') {
+      this.updateAI(dt);
+    }
 
     // 7. Check win/loss conditions
     this.checkMatchEnd();
@@ -255,18 +257,11 @@ export class SimulationEngine {
 
     // 3. Level-specific collision rules
     // Level 1: d/dx vs Polynomial (x³, x², x, 1)
+    // In Level 1, player (derivative) receives zero contact damage from polynomial spheres (only laser damage)
     if (this.level.id === 1 || player.id === 'ddx' || player.symbol === 'd/dx') {
       const polySymbols = ['x³', 'x²', 'x', '1'];
       if (polySymbols.includes(enemy.symbol)) {
         this.applyDerivativeToPoly(enemy, collisionPos);
-        // Player takes a light contact bump
-        player.takeDamage(1);
-        this.eventBus.emit('DAMAGE_DEALT', {
-          targetId: player.id,
-          amount: 1,
-          color: '#F4511E',
-          position: { x: player.position.x, y: player.position.y },
-        });
         return;
       }
     }

@@ -35,7 +35,9 @@ You take command of the left-hand champion (highlighted with an active cyan reti
 | **Activate Skill** | <kbd>Spacebar</kbd> or **[⚡ TRIGGER SKILL]** | Unleashes your entity's signature mathematical curve laser or projectile when charged. |
 | **Mute / Unmute** | <kbd>🔊</kbd> Icon in HUD | Toggles the 8-bit procedural Web Audio synthesizer. |
 | **Restart Match** | <kbd>🔄</kbd> Icon in HUD | Resets the simulation to the 3-2-1 countdown. |
+| **Math Theory Guide** | <kbd>📖</kbd> Icon in HUD/Menu | Opens the interactive mathematical laboratory & didactic guide for all 10 levels. |
 | **Language Switcher** | **[EN / ES / KO]** in Header | Switch the entire UI seamlessly between English, Spanish, and Korean. |
+| **Client Routing** | `/#/levels`, `/#/level/:id`, `/#/info/:id` | Full hash-based client-side routing with browser back/forward history support. |
 
 ---
 
@@ -93,8 +95,12 @@ src/
 ├── i18n/
 │   ├── translations.ts        # Full localization dictionaries (en, es, ko)
 │   └── LanguageContext.tsx    # Reactive multi-language provider
-└── ui/
-    └── components/            # Modern Tailwind CSS HUD, HP bars, and level selector
+├── ui/
+│   └── components/            # Modern Tailwind CSS HUD, HP bars, Level Selector & Math Lab
+│       ├── GameArenaScreen.tsx# Arena HUD, input handling, and 60Hz loop coordinator
+│       ├── MathInfoScreen.tsx # Interactive Didactic Math Guide & Laboratory
+│       ├── LevelSelectScreen.tsx # 10-Level selection dashboard & links
+│       └── VictoryModal.tsx   # Animated victory popup with instant background freeze
 ```
 
 ### Architectural Highlights
