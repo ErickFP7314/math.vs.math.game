@@ -54,8 +54,7 @@ export const MathInfoScreen: React.FC<MathInfoScreenProps> = ({
   const [expX, setExpX] = useState<number>(1.0);
   const [imagPower, setImagPower] = useState<number>(0);
   const [partialY, setPartialY] = useState<number>(2.0);
-  const [multivarX, setMultivarX] = useState<number>(1.5);
-  const [multivarY, setMultivarY] = useState<number>(0.8);
+  const [trigPhase, setTrigPhase] = useState<number>(0);
   const [integralC, setIntegralC] = useState<number>(3);
   const [waveAmp, setWaveAmp] = useState<number>(1.5);
   const [waveFreq, setWaveFreq] = useState<number>(2.0);
@@ -260,33 +259,60 @@ export const MathInfoScreen: React.FC<MathInfoScreenProps> = ({
           : 'You play as ∂/∂y. A single physical touch on e^x triggers a devastating one-shot KO. Dodge its ranged blades to get in close.',
       },
       5: {
-        mainFormula: '\\frac{\\partial}{\\partial y}\\left(e^{xy}\\right) = x \\cdot e^{xy}',
+        mainFormula: '\\frac{d}{dx}\\sin(x) = \\cos(x),\\quad \\frac{d}{dx}\\cos(x) = -\\sin(x)',
         theoremName: isEs
-          ? 'Regla de la Cadena Multivariable'
+          ? 'Ciclo Diferencial de Funciones Trigonométricas'
           : isKo
-          ? '다변수 연쇄 법칙 (Chain Rule)'
-          : 'Multivariable Chain Rule',
+          ? '삼각함수 미분 순환 주기'
+          : 'Cyclic Differentiation of Trigonometric Functions',
         explanation: isEs
-          ? 'Al acoplar x e y en el exponente e^(xy), la derivada parcial respecto a y hace emerger el factor x como coeficiente multiplicador multiplicativo.'
+          ? 'Las derivadas sucesivas de las funciones trigonométricas forman un ciclo cuaternario cerrado de periodo 4: sin(x) → cos(x) → -sin(x) → -cos(x) → sin(x).'
           : isKo
-          ? '지수부에 x와 y가 곱해진 e^(xy)는 y에 대해 편미분할 때 내부 함수 xy의 미분값 x가 앞선 계수로 곱해져 나옵니다.'
-          : 'Coupling x and y in the exponent produces the multiplier x via the inner derivative ∂(xy)/∂y = x.',
+          ? '삼각함수의 순환 미분은 주기 4의 닫힌 순환을 이룹니다: sin(x) → cos(x) → -sin(x) → -cos(x) → sin(x).'
+          : 'Successive derivatives of trigonometric functions form a closed 4-periodic cycle: sin(x) → cos(x) → -sin(x) → -cos(x) → sin(x).',
         breakdownList: [
           {
-            title: isEs ? 'Factor Escudo x' : isKo ? '방어 계수 x' : 'Shield Multiplier x',
-            math: 'u = xy \\implies \\frac{\\partial u}{\\partial y} = x',
+            title: isEs ? '1ª Derivada' : isKo ? '1차 미분' : '1st Derivative',
+            math: '\\frac{d}{dx}\\sin(x) = \\cos(x)',
             desc: isEs
-              ? 'La presencia de x mitiga la muerte instantánea y genera orbes orbitales protectores.'
+              ? 'sin(x) se transforma en cos(x).'
               : isKo
-              ? 'x의 존재로 인해 즉사가 방지되고 방어용 궤도 구체가 형성됩니다.'
-              : 'The emergence of x mitigates instant one-shots and provides shielding resistance.',
+              ? 'sin(x)가 cos(x)로 변환됩니다.'
+              : 'sin(x) transforms into cos(x).',
+          },
+          {
+            title: isEs ? '2ª Derivada' : isKo ? '2차 미분' : '2nd Derivative',
+            math: '\\frac{d}{dx}\\cos(x) = -\\sin(x)',
+            desc: isEs
+              ? 'cos(x) se transforma en -sin(x).'
+              : isKo
+              ? 'cos(x)가 -sin(x)로 변환됩니다.'
+              : 'cos(x) transforms into -sin(x).',
+          },
+          {
+            title: isEs ? '3ª Derivada' : isKo ? '3차 미분' : '3rd Derivative',
+            math: '\\frac{d}{dx}(-\\sin(x)) = -\\cos(x)',
+            desc: isEs
+              ? '-sin(x) se transforma en -cos(x).'
+              : isKo
+              ? '-sin(x)가 -cos(x)로 변환됩니다.'
+              : '-sin(x) transforms into -cos(x).',
+          },
+          {
+            title: isEs ? '4ª Derivada (Cierre de Ciclo)' : isKo ? '4차 미분 (주기 완성)' : '4th Derivative (Cycle Reset)',
+            math: '\\frac{d}{dx}(-\\cos(x)) = \\sin(x)',
+            desc: isEs
+              ? '-cos(x) retorna a sin(x), completando el periodo 4.'
+              : isKo
+              ? '-cos(x)가 sin(x)로 돌아와 주기 4가 완성됩니다.'
+              : '-cos(x) returns to sin(x), closing the 4-step cycle.',
           },
         ],
         mechanicSummary: isEs
-          ? 'A diferencia del nivel 4, e^(xy) resiste el golpe de ∂/∂y gracias a su factor acoplado. Requiere varios impactos estratégicos.'
+          ? 'El operador d/dx no recibe daño de contacto al golpear a sin(x). Cada impacto muta la función enemiga por el ciclo trigonométrico e inflige 14 de daño. La enemiga contrataca con ondas sinusoidales.'
           : isKo
-          ? '4레벨과 달리 e^(xy)는 결합 계수 덕분에 즉사하지 않고 버텨냅니다. 체계적인 연타가 필요합니다.'
-          : 'Unlike Level 4, e^(xy) survives direct contact thanks to its coupled multiplier. Multiple tactical strikes are required.',
+          ? 'd/dx 연산자는 sin(x)와 직접 충돌해도 피해를 입지 않습니다. 타격할 때마다 적 함수가 순환 주기에 따라 변환되며 14 데미지를 입힙니다. 적은 파동 레이저로 공격합니다.'
+          : 'd/dx takes zero contact damage from sin(x). Each collision transforms the enemy function along the trig cycle and deals 14 damage. The enemy fires wave lasers.',
       },
       6: {
         mainFormula: '\\int e^x dx = e^x + C',
@@ -448,7 +474,7 @@ export const MathInfoScreen: React.FC<MathInfoScreenProps> = ({
   }, [selectedLevel, language]);
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-3 sm:p-6 flex flex-col space-y-6">
+    <div className="w-full max-w-4xl mx-auto p-3 sm:p-6 pb-24 flex flex-col space-y-6">
       {/* Top Navigation Bar */}
       <div
         className={`flex items-center justify-between pb-3 border-b transition-colors duration-200 ${
@@ -897,45 +923,62 @@ export const MathInfoScreen: React.FC<MathInfoScreenProps> = ({
 
                 {selectedLevel === 5 && (
                   <div className="w-full space-y-4">
-                    <div className="text-center space-y-1">
-                      <div className="text-xs font-mono text-slate-400">
-                        <KatexBlock formula="f(x, y) = e^{xy} \implies \frac{\partial}{\partial y}(e^{xy}) = x \cdot e^{xy}" />
-                      </div>
-                      <div className="text-xl font-mono font-black text-cyan-400">
-                        <KatexBlock
-                          formula={`\\text{Gradiente } = ${(
-                            multivarX * Math.exp(multivarX * multivarY)
-                          ).toFixed(2)}`}
-                        />
-                      </div>
-                    </div>
+                    {(() => {
+                      const funcs = ['\\sin(x)', '\\cos(x)', '-\\sin(x)', '-\\cos(x)'];
+                      const derivs = ['\\cos(x)', '-\\sin(x)', '-\\cos(x)', '\\sin(x)'];
+                      const currentFunc = funcs[trigPhase % 4];
+                      const currentDeriv = derivs[trigPhase % 4];
+                      const colors = ['#7B1FA2', '#9C27B0', '#E91E63', '#FF5722'];
+                      const activeColor = colors[trigPhase % 4];
 
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs font-mono">
-                        <span>Variable x: {multivarX.toFixed(1)}</span>
-                        <input
-                          type="range"
-                          min="0.5"
-                          max="2.5"
-                          step="0.1"
-                          value={multivarX}
-                          onChange={(e) => setMultivarX(parseFloat(e.target.value))}
-                          className="w-32 accent-cyan-400"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between text-xs font-mono">
-                        <span>Variable y: {multivarY.toFixed(1)}</span>
-                        <input
-                          type="range"
-                          min="0.1"
-                          max="1.5"
-                          step="0.1"
-                          value={multivarY}
-                          onChange={(e) => setMultivarY(parseFloat(e.target.value))}
-                          className="w-32 accent-indigo-400"
-                        />
-                      </div>
-                    </div>
+                      return (
+                        <>
+                          <div className="text-center space-y-1">
+                            <div className="text-xs font-mono text-slate-400">
+                              <KatexBlock formula={`f(x) = ${currentFunc} \\implies f'(x) = ${currentDeriv}`} />
+                            </div>
+                            <div className="text-xl font-mono font-black" style={{ color: activeColor }}>
+                              <KatexBlock formula={`\\frac{d}{dx}\\left(${currentFunc}\\right) = ${currentDeriv}`} />
+                            </div>
+                          </div>
+
+                          {/* SVG Wave Plot */}
+                          <svg viewBox="-50 -30 100 60" className="w-full h-32 bg-black/30 rounded-lg">
+                            <line x1="-50" y1="0" x2="50" y2="0" stroke="#475569" strokeWidth="0.8" />
+                            <line x1="0" y1="-30" x2="0" y2="30" stroke="#475569" strokeWidth="0.8" />
+                            <path
+                              d={Array.from({ length: 61 }, (_, i) => {
+                                const xVal = -Math.PI + (i / 60) * 2 * Math.PI;
+                                let yVal = 0;
+                                if (trigPhase % 4 === 0) yVal = Math.sin(xVal);
+                                else if (trigPhase % 4 === 1) yVal = Math.cos(xVal);
+                                else if (trigPhase % 4 === 2) yVal = -Math.sin(xVal);
+                                else yVal = -Math.cos(xVal);
+                                const svgX = (xVal / Math.PI) * 45;
+                                const svgY = -yVal * 20;
+                                return `${i === 0 ? 'M' : 'L'} ${svgX} ${svgY}`;
+                              }).join(' ')}
+                              fill="none"
+                              stroke={activeColor}
+                              strokeWidth="2.5"
+                            />
+                          </svg>
+
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-mono text-slate-400">
+                              Paso { (trigPhase % 4) + 1 } / 4
+                            </span>
+                            <button
+                              onClick={() => setTrigPhase((prev) => prev + 1)}
+                              className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-cyan-500 hover:bg-cyan-400 text-white transition-all shadow-md flex items-center space-x-1"
+                            >
+                              <span>Aplicar d/dx</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 

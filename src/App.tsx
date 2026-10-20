@@ -50,16 +50,16 @@ export const AppContent: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen flex flex-col justify-center items-center p-2 selection:bg-cyan-500 selection:text-white font-sans transition-colors duration-200 ${
+      className={`min-h-screen flex flex-col selection:bg-cyan-500 selection:text-white font-sans transition-colors duration-200 ${
         theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900'
       }`}
     >
       <Routes>
-        <Route path="/" element={<LevelSelectRoute />} />
-        <Route path="/levels" element={<LevelSelectRoute />} />
-        <Route path="/level/:id" element={<GameArenaRoute />} />
-        <Route path="/info" element={<MathInfoRoute />} />
-        <Route path="/info/:id" element={<MathInfoRoute />} />
+        <Route path="/" element={<div className="flex-1 flex flex-col justify-center items-center p-2"><LevelSelectRoute /></div>} />
+        <Route path="/levels" element={<div className="flex-1 flex flex-col justify-center items-center p-2"><LevelSelectRoute /></div>} />
+        <Route path="/level/:id" element={<div className="flex-1 flex flex-col justify-center items-center p-2"><GameArenaRoute /></div>} />
+        <Route path="/info" element={<div className="w-full h-screen overflow-y-auto custom-scrollbar"><MathInfoRoute /></div>} />
+        <Route path="/info/:id" element={<div className="w-full h-screen overflow-y-auto custom-scrollbar"><MathInfoRoute /></div>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

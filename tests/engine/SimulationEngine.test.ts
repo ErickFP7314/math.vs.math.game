@@ -440,4 +440,82 @@ describe('SimulationEngine', () => {
     expect(engine.leftEntity.position.x).toBe(initialPlayerPos.x);
     expect(engine.leftEntity.position.y).toBe(initialPlayerPos.y);
   });
+
+  it('cycles Level 5 trig function on collision with d/dx with zero player contact damage', () => {
+    const testBus = new EventBus();
+    const level5 = LevelRegistry.getLevel(5)!;
+    const engine = new SimulationEngine(level5, testBus);
+
+    engine.update(3.1); // enter combat
+
+    expect(engine.leftEntity.symbol).toBe('d/dx');
+    expect(engine.rightEntity.symbol).toBe('sin x');
+    const initialPlayerHp = engine.leftEntity.hp;
+
+    // Hit 1: d/dx(sin x) = cos x
+    engine.leftEntity.position = engine.rightEntity.position.clone();
+    engine.update(1 / 60);
+    expect(engine.rightEntity.symbol).toBe('cos x');
+    expect(engine.leftEntity.hp).toBe(initialPlayerHp); // Zero contact damage!
+    expect(engine.rightEntity.hp).toBe(86); // 100 - 14
+
+    // Hit 2: d/dx(cos x) = -sin x
+    engine.leftEntity.position = engine.rightEntity.position.clone();
+    engine.update(1 / 60);
+    expect(engine.rightEntity.symbol).toBe('-sin x');
+    expect(engine.leftEntity.hp).toBe(initialPlayerHp);
+
+    // Hit 3: d/dx(-sin x) = -cos x
+    engine.leftEntity.position = engine.rightEntity.position.clone();
+    engine.update(1 / 60);
+    expect(engine.rightEntity.symbol).toBe('-cos x');
+
+    // Hit 4: d/dx(-cos x) = sin x
+    engine.leftEntity.position = engine.rightEntity.position.clone();
+    engine.update(1 / 60);
+    expect(engine.rightEntity.symbol).toBe('sin x');
+    expect(engine.derivativeHitCount).toBe(4);
+  });
+
+  it('handles Level 6 constant creation and polynomial degree upgrading upon collision with ∫', () => {
+    const testBus = new EventBus();
+    const level6 = LevelRegistry.getLevel(6)!;
+    const engine = new SimulationEngine(level6, testBus);
+
+    engine.update(3.1); // enter combat
+
+    expect(engine.leftEntity.symbol).toBe('∫');
+    expect(engine.rightEntity.symbol).toBe('eˣ');
+
+    // Hit 1: ∫ vs e^x -> spawns C1 and damages e^x
+    engine.leftEntity.position = engine.rightEntity.position.clone();
+    engine.update(1 / 60);
+
+    expect(engine.rightEntity.hp).toBe(70); // 80 - 10
+    expect(engine.subEntities.length).toBe(1);
+    const c1 = engine.subEntities[0];
+    expect(c1.polyDegree).toBe(0);
+
+    // Move e^x away to collide specifically with c1
+    engine.rightEntity.position = vec2(40, 40);
+
+    // Hit 2: ∫ vs C1 -> upgrades to C1 x and spawns C2
+    c1.position = vec2(0, 0);
+    engine.leftEntity.position = vec2(0, 0);
+    engine.update(1 / 60);
+
+    expect(c1.polyDegree).toBe(1);
+    expect(c1.symbol).toBe('C_{1}x');
+    expect(engine.subEntities.length).toBe(2);
+
+    // Hit 3: ∫ vs C1x -> upgrades to C1/2 x^2 and spawns C3
+    engine.subEntities[1].position = vec2(-40, -40);
+    c1.position = vec2(0, 0);
+    engine.leftEntity.position = vec2(0, 0);
+    engine.update(1 / 60);
+
+    expect(c1.polyDegree).toBe(2);
+    expect(c1.symbol).toContain('x^2');
+    expect(engine.subEntities.length).toBe(3);
+  });
 });

@@ -9,6 +9,8 @@ interface HPBarProps {
   rightEntity: BaseEntity;
   polyHp?: { current: number; max: number };
   activeSpheresCount: number;
+  levelId?: number;
+  derivativeHitCount?: number;
 }
 
 export const HPBar: React.FC<HPBarProps> = ({
@@ -16,10 +18,13 @@ export const HPBar: React.FC<HPBarProps> = ({
   rightEntity,
   polyHp,
   activeSpheresCount,
+  levelId = 1,
+  derivativeHitCount = 0,
 }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const isKo = language === 'ko';
 
   const [shakingLeft, setShakingLeft] = useState(false);
   const [shakingRight, setShakingRight] = useState(false);
@@ -54,16 +59,29 @@ export const HPBar: React.FC<HPBarProps> = ({
   // Determine dynamic badge for right entity
   const getRightBadge = () => {
     if (rightEntity.hasStatus('BURN')) return `[${t.onFire}]`;
-    if (rightEntity.isImmuneToDerivative) return `[${t.immune}]`;
-    if (rightEntity.symbol === 'x³') {
-      return rightEntity.isReady()
-        ? `[${t.graphInvoke}]`
-        : `[${activeSpheresCount} ${t.spheresCount}]`;
+    if (rightEntity.isImmuneToDerivative && levelId === 2) return `[${t.blade}]`;
+
+    if (levelId === 1) {
+      return isKo ? `[공 ${activeSpheresCount}개]` : `[${activeSpheresCount} ${t.spheresCount}]`;
     }
-    if (rightEntity.symbol === 'eˣ' || rightEntity.symbol === 'eˣʸ') {
-      return rightEntity.isReady()
-        ? `[${t.expBlade}]`
-        : `[${t.recharging} ${Math.ceil(rightEntity.cooldownRemaining)}s]`;
+    if (levelId === 2 || levelId === 4 || levelId === 6 || levelId === 8) {
+      return `[${t.blade}]`;
+    }
+    if (levelId === 5) {
+      const ampStr = rightEntity.amplitude > 1 ? `${rightEntity.amplitude}` : '';
+      const freqStr = rightEntity.frequency > 1 ? `${rightEntity.frequency}x` : 'x';
+      const funcName = rightEntity.symbol.replace('x', freqStr);
+      const periodStr = rightEntity.frequency > 1 ? `π = 3.14s` : `2π = 6.28s`;
+      return `[y = ${ampStr}${funcName}] ${periodStr}`;
+    }
+    if (levelId === 7) {
+      const ampStr = rightEntity.amplitude > 1 ? `${rightEntity.amplitude}` : '';
+      const freqStr = rightEntity.frequency > 1 ? `${rightEntity.frequency}x` : 'x';
+      const periodStr = rightEntity.frequency > 1 ? `π = 3.14s` : `2π = 6.28s`;
+      return `[y = ${ampStr}cos ${freqStr}] ${periodStr}`;
+    }
+    if (levelId === 8 || levelId === 9) {
+      return `[${t.nextSector} θ = ${(rightEntity.sectorAngle / Math.PI).toFixed(2)}π]`;
     }
     if (rightEntity.symbol === 'i') {
       const phases = [
@@ -74,23 +92,43 @@ export const HPBar: React.FC<HPBarProps> = ({
       ];
       return phases[rightEntity.currentPhaseIndex % 4];
     }
-    if (rightEntity.symbol === 'π') {
-      return `[${t.sectorSlash} θ = ${(rightEntity.sectorAngle / Math.PI).toFixed(2)}π]`;
-    }
-    if (rightEntity.symbol === 'cos x' || rightEntity.symbol === 'sin x') {
-      return rightEntity.isReady()
-        ? `[${t.cosineWave}]`
-        : `[T = ${rightEntity.cooldownRemaining.toFixed(1)}s]`;
-    }
     return rightEntity.isReady() ? `[${t.ready}]` : `[${t.recharging} ${Math.ceil(rightEntity.cooldownRemaining)}s]`;
   };
 
   const getLeftBadge = () => {
     if (leftEntity.hasStatus('BURN')) return `[${t.onFire}]`;
-    if (leftEntity.symbol === 'd/dx') return `[${t.ready}]`;
-    if (leftEntity.symbol === '∂/∂y') return `[${t.partialYReady}]`;
-    if (leftEntity.symbol === '∫') return leftEntity.isReady() ? `[${t.integralWhip}]` : `[${t.recharging}]`;
-    if (leftEntity.symbol === 'sin x') return leftEntity.isReady() ? `[${t.sineWave}]` : `[T = ${leftEntity.cooldownRemaining.toFixed(1)}s]`;
+    if (levelId === 1) {
+      const count = Math.max(1, derivativeHitCount);
+      return isKo ? `[미분 ${count}회]` : `[${t.derivationsCount} ${count}]`;
+    }
+    if (levelId === 2 || levelId === 5) {
+      const count = Math.max(1, derivativeHitCount);
+      return isKo ? `[미분 시도 ${count}회]` : `[${t.derivativeAttempt} ${count}]`;
+    }
+    if (levelId === 3 || levelId === 8) {
+      return `[${t.blade}]`;
+    }
+    if (levelId === 4) {
+      return `[${t.partialYReady}]`;
+    }
+    if (levelId === 6) {
+      return `[${t.integralWhipReady}]`;
+    }
+    if (levelId === 7) {
+      const ampStr = leftEntity.amplitude > 1 ? `${leftEntity.amplitude}` : '';
+      const freqStr = leftEntity.frequency > 1 ? `${leftEntity.frequency}x` : 'x';
+      const periodStr = leftEntity.frequency > 1 ? `π = 3.14s` : `2π = 6.28s`;
+      return `[y = ${ampStr}sin ${freqStr}] ${periodStr}`;
+    }
+    if (levelId === 9 || leftEntity.symbol === 'i') {
+      const phases = [
+        `[${t.phaseI}]`,
+        `[${t.phaseMinus1}]`,
+        `[${t.phaseMinusI}]`,
+        `[${t.phase1}]`,
+      ];
+      return phases[leftEntity.currentPhaseIndex % 4];
+    }
     return leftEntity.isReady() ? `[${t.ready}]` : `[${t.recharging} ${Math.ceil(leftEntity.cooldownRemaining)}s]`;
   };
 

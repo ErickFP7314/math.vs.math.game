@@ -58,6 +58,8 @@ export class BaseEntity implements PhysicalCircle {
   frequency = 1;         // for trig
   sectorAngle = Math.PI / 6; // for pi
   activeDecimalIndex = 0;    // for pi
+  polyDegree = 0;            // for polynomial degree of constant / sub-entities
+  cIndex = 1;                // for constant index C_k
 
   constructor(config: EntityConfig) {
     this.id = config.id;
@@ -166,6 +168,8 @@ export class BaseEntity implements PhysicalCircle {
     copy.frequency = this.frequency;
     copy.sectorAngle = this.sectorAngle;
     copy.activeDecimalIndex = this.activeDecimalIndex;
+    copy.polyDegree = this.polyDegree;
+    copy.cIndex = this.cIndex;
     return copy;
   }
 }

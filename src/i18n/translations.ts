@@ -36,9 +36,13 @@ export interface Translations {
   sineWave: string;
   cosineWave: string;
   integralWhip: string;
+  integralWhipReady: string;
   partialYReady: string;
   spheresCount: string;
   derivationsCount: string;
+  derivativeAttempt: string;
+  nextSector: string;
+  blade: string;
   phaseI: string;
   phaseMinus1: string;
   phaseMinusI: string;
@@ -80,9 +84,13 @@ export const translations: Record<Language, Translations> = {
     sineWave: 'Sine Wave!',
     cosineWave: 'Cosine Wave!',
     integralWhip: 'Integral Whip!',
+    integralWhipReady: '∫ Whip Ready!',
     partialYReady: 'Ready for ∂/∂y',
-    spheresCount: 'Spheres',
-    derivationsCount: 'Derivations',
+    spheresCount: 'Balls',
+    derivationsCount: 'Derivative',
+    derivativeAttempt: 'Derivative Attempt',
+    nextSector: 'Next Sector',
+    blade: 'Blade',
     phaseI: 'i (Pierce)',
     phaseMinus1: '-1 (Reflect)',
     phaseMinusI: '-i (Pierce+Reflect)',
@@ -132,13 +140,13 @@ export const translations: Record<Language, Translations> = {
         rightLabel: 'Exponential',
       },
       5: {
-        title: 'Partial Derivative vs. Multivariable Exponential',
-        subtitle: '∂/∂y vs. eˣʸ',
-        description: 'Multivariable chain rule ∂/∂y(eˣʸ) = x·eˣʸ spawns a shielding orbital multiplier, absorbing part of the critical damage.',
-        leftName: 'Partial Derivative',
-        rightName: 'Multivariable Exp',
-        leftLabel: 'Partial ∂/∂y',
-        rightLabel: 'eˣʸ',
+        title: 'Differential Operator vs. Sine Function',
+        subtitle: 'd/dx vs. sin(x)',
+        description: 'Cyclic differentiation d/dx: sin(x) → cos(x) → -sin(x) → -cos(x) → sin(x). Player takes no contact damage; sin(x) fires wave lasers.',
+        leftName: 'Differential Operator',
+        rightName: 'Sine Function',
+        leftLabel: 'Derivative d/dx',
+        rightLabel: 'sin(x)',
       },
       6: {
         title: 'Integral Operator vs. Exponential',
@@ -213,9 +221,13 @@ export const translations: Record<Language, Translations> = {
     sineWave: '¡Onda Seno!',
     cosineWave: '¡Onda Coseno!',
     integralWhip: '¡Látigo Integral!',
+    integralWhipReady: '¡Látigo ∫ Listo!',
     partialYReady: 'Listo para ∂/∂y',
-    spheresCount: 'Esferas',
-    derivationsCount: 'Derivaciones',
+    spheresCount: 'Bolas',
+    derivationsCount: 'Derivada',
+    derivativeAttempt: 'Intento de Derivada',
+    nextSector: 'Próximo Sector',
+    blade: 'Cuchilla',
     phaseI: 'i (Perforación)',
     phaseMinus1: '-1 (Reflexión)',
     phaseMinusI: '-i (Perforación+Reflexión)',
@@ -265,13 +277,13 @@ export const translations: Record<Language, Translations> = {
         rightLabel: 'Exponencial',
       },
       5: {
-        title: 'Derivada Parcial vs. Exponencial Multivariable',
-        subtitle: '∂/∂y vs. eˣʸ',
-        description: 'La regla de la cadena multivariable ∂/∂y(eˣʸ) = x·eˣʸ genera un orbital multiplicador reduciendo el impacto crítico letal.',
-        leftName: 'Derivada Parcial',
-        rightName: 'Exponencial Multivariable',
-        leftLabel: 'Parcial ∂/∂y',
-        rightLabel: 'eˣʸ',
+        title: 'Operador Diferencial vs. Función Seno',
+        subtitle: 'd/dx vs. sin(x)',
+        description: 'Derivación cíclica d/dx: sin(x) → cos(x) → -sin(x) → -cos(x) → sin(x). El jugador no recibe daño de contacto; sin(x) dispara ondas sinusoidales.',
+        leftName: 'Operador Diferencial',
+        rightName: 'Función Seno',
+        leftLabel: 'Derivada d/dx',
+        rightLabel: 'sin(x)',
       },
       6: {
         title: 'Operador Integral vs. Función Exponencial',
@@ -346,9 +358,13 @@ export const translations: Record<Language, Translations> = {
     sineWave: '사인파!',
     cosineWave: '코사인파!',
     integralWhip: '∫ 채찍!',
+    integralWhipReady: '∫ 채찍 준비!',
     partialYReady: 'y 편미분 준비',
     spheresCount: '공',
     derivationsCount: '미분',
+    derivativeAttempt: '미분 시도',
+    nextSector: '다음 부채꼴',
+    blade: '칼날',
     phaseI: 'i (관통)',
     phaseMinus1: '-1 (반사)',
     phaseMinusI: '-i (관통+반사)',
@@ -398,13 +414,13 @@ export const translations: Record<Language, Translations> = {
         rightLabel: '지수함수',
       },
       5: {
-        title: '편미분 연산자 vs. 다변수 지수함수',
-        subtitle: '∂/∂y vs. eˣʸ',
-        description: '연쇄 법칙 ∂/∂y(eˣʸ) = x·eˣʸ 가 배수 오비탈을 생성하여 치명타 데미지를 분산시킵니다.',
-        leftName: '편미분 연산자',
-        rightName: '다변수 지수함수',
-        leftLabel: '편미분 ∂/∂y',
-        rightLabel: 'eˣʸ',
+        title: '미분 연산자 vs. 사인 함수',
+        subtitle: 'd/dx vs. sin(x)',
+        description: '순환 미분 주기 d/dx: sin(x) → cos(x) → -sin(x) → -cos(x) → sin(x). 플레이어는 직접 충돌 피해를 입지 않으며 적은 사인파 레이저를 발사합니다.',
+        leftName: '미분 연산자',
+        rightName: '사인 함수',
+        leftLabel: '미분 d/dx',
+        rightLabel: 'sin(x)',
       },
       6: {
         title: '적분 연산자 vs. 지수함수',
