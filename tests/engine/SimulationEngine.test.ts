@@ -718,4 +718,200 @@ describe('SimulationEngine', () => {
       expect(engine.leftEntity.hp).toBe(playerHp); // untouched
     });
   });
+
+  describe('Level 4 (reglas2/nivel4.md) Specifications', () => {
+    it('initializes Level 4 with ∂/∂y (100 HP, 0 cooldown) vs e^x (80 HP, 1s initial cooldown)', () => {
+      const level4 = LevelRegistry.getLevel(4)!;
+      const engine = new SimulationEngine(level4);
+
+      expect(engine.leftEntity.symbol).toBe('∂/∂y');
+      expect(engine.leftEntity.hp).toBe(100);
+      expect(engine.leftEntity.maxHp).toBe(100);
+      expect(engine.leftEntity.cooldownRemaining).toBe(0);
+
+      expect(engine.rightEntity.symbol).toBe('eˣ');
+      expect(engine.rightEntity.hp).toBe(80);
+      expect(engine.rightEntity.maxHp).toBe(80);
+      expect(engine.rightEntity.cooldownRemaining).toBe(1.0);
+
+      // Skip countdown to combat
+      engine.update(3.1);
+      expect(engine.status).toBe('COMBAT');
+      expect(engine.leftEntity.cooldownRemaining).toBe(0);
+      expect(engine.rightEntity.cooldownRemaining).toBe(1.0);
+    });
+
+    it('Test 1: One-Shot kill on physical body collision (∂/∂y e^x = 0, -80 HP instant death)', () => {
+      const testBus = new EventBus();
+      let formulaReceived = '';
+      let damageDealtToEnemy = 0;
+      testBus.on('MATH_FORMULA', (payload: any) => {
+        formulaReceived = payload.latex;
+      });
+      testBus.on('DAMAGE_DEALT', (payload: any) => {
+        if (payload.targetId === 'exp') {
+          damageDealtToEnemy = payload.amount;
+        }
+      });
+
+      const level4 = LevelRegistry.getLevel(4)!;
+      const engine = new SimulationEngine(level4, testBus);
+
+      // Skip countdown into combat at 00:03
+      engine.update(3.1);
+
+      // Aim ∂/∂y straight at e^x
+      engine.leftEntity.position = vec2(0, 0);
+      engine.leftEntity.velocity = vec2(10, 0);
+      engine.rightEntity.position = vec2(12, 0); // distance 12 <= R1 (6.5) + R2 (6.5) = 13.0
+      engine.rightEntity.velocity = vec2(-10, 0);
+
+      const playerHpBefore = engine.leftEntity.hp;
+
+      // In the exact frame where distance <= R1 + R2:
+      engine.update(1 / 60);
+
+      // e^x drops from 80 to 0 instantly (-80 HP)
+      expect(engine.rightEntity.hp).toBe(0);
+      expect(engine.rightEntity.isDead).toBe(true);
+      expect(damageDealtToEnemy).toBe(80);
+      expect(formulaReceived).toContain('\\frac{\\partial}{\\partial y}');
+
+      // Player receives 0 recoil/contact damage
+      expect(engine.leftEntity.hp).toBe(playerHpBefore);
+
+      // Match ends in VICTORY
+      expect(engine.status).toBe('VICTORY');
+    });
+
+    it('Test 2: Harmless intangibility during 1s telegraph phase', () => {
+      const level4 = LevelRegistry.getLevel(4)!;
+      const engine = new SimulationEngine(level4);
+
+      engine.update(3.1); // Combat starts, enemy cooldown is 1.0s
+      // Keep entities apart so random directions from countdown do not trigger premature collision
+      engine.leftEntity.position = vec2(-30, -30);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.position = vec2(30, 30);
+      engine.rightEntity.velocity = vec2(0, 0);
+
+      expect(engine.activeLasers.length).toBe(0);
+
+      // Advance 1s -> e^x triggers 1.0s telegraph of Exponential Blade
+      engine.update(1.05);
+      expect(engine.activeLasers.length).toBe(1);
+      const blade = engine.activeLasers[0];
+      expect(blade.isTelegraph).toBe(true);
+
+      // Player passes through the curve at 0.5s of telegraphing
+      // Place player on the curve safely away from enemy ball
+      engine.leftEntity.position = vec2(blade.sourcePos.x - 10, blade.sourcePos.y);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.velocity = vec2(0, 0);
+      engine.update(0.5);
+
+      // Player must keep 100/100 HP and have NO burn status while curve is telegraphing
+      expect(engine.leftEntity.hp).toBe(100);
+      expect(engine.leftEntity.hasStatus('BURN')).toBe(false);
+
+      // Move player far away before 1.0s firing moment
+      engine.leftEntity.position = vec2(-45, -45);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.update(0.6); // Telegraph ends, blade fires in empty air
+
+      expect(engine.leftEntity.hp).toBe(100);
+      expect(engine.leftEntity.hasStatus('BURN')).toBe(false);
+    });
+
+    it('Test 3: Exact mathematical damage of blade cut (4 HP) + 5 ticks of Burn DoT (5x -2 HP = -14 HP total, 100 -> 86 HP)', () => {
+      const level4 = LevelRegistry.getLevel(4)!;
+      const engine = new SimulationEngine(level4);
+
+      engine.update(3.1); // Combat
+
+      // Position enemy safely away at (35, 35) and player at (-20, 0)
+      // The exponential laser has sourcePos at (0, 0).
+      // At x = -20: y = 0 + exp((-20 - 0) * 0.15) = exp(-3) ≈ 0.05.
+      // So player at (-20, 0) touches the flat section of the curve!
+      // And player and enemy are ~65 units apart so they never physically collide!
+      engine.rightEntity.position = vec2(35, 35);
+      engine.rightEntity.velocity = vec2(0, 0);
+      engine.leftEntity.position = vec2(-20, 0);
+      engine.leftEntity.velocity = vec2(0, 0);
+
+      // Trigger blade directly at end of telegraph
+      engine.activeLasers = [
+        {
+          id: 'blade_shot',
+          ownerId: engine.rightEntity.id,
+          sourcePos: vec2(0, 0),
+          curveType: 'EXPONENTIAL',
+          isTelegraph: false,
+          telegraphTime: 0,
+          durationRemaining: 0.5,
+          damage: 4,
+        },
+      ];
+
+      // Instant impact frame
+      engine.update(0.016);
+
+      // In the impact frame: 100 - 4 (impact) - 2 (1st instant burn tick) = 94 HP
+      expect(engine.leftEntity.hp).toBe(94);
+      expect(engine.leftEntity.hasStatus('BURN')).toBe(true);
+
+      // Keep them separated during burn ticks
+      engine.rightEntity.position = vec2(35, 35);
+      engine.rightEntity.velocity = vec2(0, 0);
+      engine.leftEntity.position = vec2(-35, -35);
+      engine.leftEntity.velocity = vec2(0, 0);
+
+      // Tick 1 after 0.75s: 94 - 2 = 92 HP
+      engine.update(0.75);
+      expect(engine.leftEntity.hp).toBe(92);
+
+      // Tick 2 after 0.75s: 92 - 2 = 90 HP
+      engine.update(0.75);
+      expect(engine.leftEntity.hp).toBe(90);
+
+      // Tick 3 after 0.75s: 90 - 2 = 88 HP
+      engine.update(0.75);
+      expect(engine.leftEntity.hp).toBe(88);
+
+      // Tick 4 after 0.85s: 88 - 2 = 86 HP (burn finishes and expires)
+      engine.update(0.85);
+      expect(engine.leftEntity.hp).toBe(86);
+      expect(engine.leftEntity.hasStatus('BURN')).toBe(false);
+
+      // Total damage is exactly 14 HP (100 - 14 = 86 HP)
+      expect(engine.leftEntity.hp).toBe(86);
+    });
+
+    it('Test 4: Absence of cooldowns and projectiles for the Player across 30 seconds', () => {
+      const level4 = LevelRegistry.getLevel(4)!;
+      const engine = new SimulationEngine(level4);
+
+      engine.update(3.1); // Combat
+
+      // Keep balls apart so they don't collide
+      engine.leftEntity.position = vec2(-40, -40);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.position = vec2(40, 40);
+      engine.rightEntity.velocity = vec2(0, 0);
+
+      // Player attempts to trigger skill
+      const skillTriggered = engine.triggerSkill('LEFT');
+      expect(skillTriggered).toBe(false);
+
+      // Run for 30 seconds
+      for (let s = 0; s < 30; s++) {
+        engine.update(1.0);
+        // Player cooldown remains 0
+        expect(engine.leftEntity.cooldownRemaining).toBe(0);
+        expect(engine.leftEntity.cooldownMax).toBe(0);
+        // No lasers owned by player
+        expect(engine.activeLasers.some((l) => l.ownerId === engine.leftEntity.id)).toBe(false);
+      }
+    });
+  });
 });

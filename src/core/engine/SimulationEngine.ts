@@ -88,6 +88,14 @@ export class SimulationEngine {
       this.rightEntity.symbol = 'i';
       this.rightEntity.name = 'i';
     }
+
+    if (level.id === 4) {
+      // Level 4: Player ∂/∂y has no cooldown, Enemy e^x starts with 1s cooldown (3s loop)
+      this.leftEntity.cooldownRemaining = 0;
+      this.leftEntity.cooldownMax = 0;
+      this.rightEntity.cooldownRemaining = 1.0;
+      this.rightEntity.cooldownMax = 3.0;
+    }
   }
 
   update(dt: number): void {
@@ -112,6 +120,13 @@ export class SimulationEngine {
           this.rightEntity.name = 'i';
           this.imaginaryPhaseTimer = 0;
           this.level3ContactCooldown = 0;
+        }
+        if (this.level.id === 4) {
+          // Level 4: At second 0, e^x enters [Cooldown 1s], Player has no cooldown
+          this.leftEntity.cooldownRemaining = 0;
+          this.leftEntity.cooldownMax = 0;
+          this.rightEntity.cooldownRemaining = 1.0;
+          this.rightEntity.cooldownMax = 3.0;
         }
         this.eventBus.emit('MATCH_START', { levelId: this.level.id });
       }
@@ -195,6 +210,25 @@ export class SimulationEngine {
             damage: 21,
           });
           this.eventBus.emit('SKILL_ACTIVATED', { entityId: this.leftEntity.id, skillName: 'Exponential Blade!' });
+        }
+      }
+
+      // Level 4 enemy e^x Exponential Blade cycle (1s initial cooldown, 3s loop)
+      if (this.level.id === 4) {
+        if (this.rightEntity.isReady() && !this.rightEntity.isDead) {
+          this.rightEntity.resetCooldown();
+          this.laserIdCounter++;
+          this.addLaser({
+            id: `laser_${this.laserIdCounter}_enemy_exp_blade`,
+            ownerId: this.rightEntity.id,
+            sourcePos: this.rightEntity.position.clone(),
+            curveType: 'EXPONENTIAL',
+            isTelegraph: true,
+            telegraphTime: 1.0,
+            durationRemaining: 0.6,
+            damage: 4,
+          });
+          this.eventBus.emit('SKILL_ACTIVATED', { entityId: this.rightEntity.id, skillName: 'Exponential Blade!' });
         }
       }
 
@@ -465,15 +499,16 @@ export class SimulationEngine {
 
     // Level 4: Partial derivative ∂/∂y vs e^x -> Instant One-Shot!
     if (this.level.id === 4 || player.symbol === '∂/∂y') {
-      enemy.takeDamage(80);
+      const oneShotDmg = enemy.maxHp || 80;
+      enemy.takeDamage(oneShotDmg);
       this.eventBus.emit('MATH_FORMULA', {
-        latex: '\\frac{\\partial}{\\partial y}(e^x) = 0 \\text{ [CRITICAL!]}',
+        latex: '\\frac{\\partial}{\\partial y} e^x = 0',
         position: { x: collisionPos.x, y: collisionPos.y },
         color: '#00C853',
       });
       this.eventBus.emit('DAMAGE_DEALT', {
         targetId: enemy.id,
-        amount: 80,
+        amount: oneShotDmg,
         isCrit: true,
         color: '#00C853',
         position: { x: enemy.position.x, y: enemy.position.y },
@@ -779,6 +814,9 @@ export class SimulationEngine {
         if (this.level.id === 3 && laser.ownerId === this.leftEntity.id) {
           laser.sourcePos = this.leftEntity.position.clone();
         }
+        if (this.level.id === 4 && laser.ownerId === this.rightEntity.id) {
+          laser.sourcePos = this.rightEntity.position.clone();
+        }
         if (laser.telegraphTime <= 0) {
           laser.isTelegraph = false; // Becomes active damaging beam
           this.eventBus.emit('LASER_FIRED', {
@@ -886,6 +924,50 @@ export class SimulationEngine {
               continue;
             }
 
+            // Level 4 specific laser damage rules (e^x Exponential Blade vs player ∂/∂y)
+            if (this.level.id === 4 && target.id === this.leftEntity.id) {
+              const rawDamage = 4; // Flat cut impact damage per rules
+
+              // 1. Instant impact damage (-4 HP)
+              target.takeDamage(rawDamage);
+              this.eventBus.emit('DAMAGE_DEALT', {
+                targetId: target.id,
+                amount: rawDamage,
+                color: '#D32F2F',
+                position: { x: target.position.x, y: target.position.y },
+              });
+              this.eventBus.emit('MATH_FORMULA', {
+                latex: `e^x \\text{ (-}${rawDamage})`,
+                position: { x: target.position.x, y: target.position.y },
+                color: '#D32F2F',
+              });
+
+              // 2. Immediate first tick of Quemadura (-2 HP) on same frame!
+              target.takeDamage(2);
+              this.eventBus.emit('DAMAGE_DEALT', {
+                targetId: target.id,
+                amount: 2,
+                color: '#FF5722',
+                position: { x: target.position.x, y: target.position.y },
+              });
+              this.eventBus.emit('MATH_FORMULA', {
+                latex: '\\text{Quemadura! (-2)}',
+                position: { x: target.position.x, y: target.position.y - 6 },
+                color: '#FF5722',
+              });
+
+              // 3. Subsequent 4 ticks of Quemadura: -2 HP every 0.75s (total 3.05s)
+              target.addStatus({
+                type: 'BURN',
+                durationRemaining: 3.05,
+                tickInterval: 0.75,
+                tickDamage: 2,
+                tickTimer: 0,
+              });
+
+              continue;
+            }
+
             // Check reflection if target has REFLECT status or is 'i' in phase -1
             if (target.symbol === 'i' && (target.currentPhaseIndex === 1 || target.currentPhaseIndex === 2)) {
               // Reflect damage back to owner
@@ -975,7 +1057,9 @@ export class SimulationEngine {
 
   private addLaser(laser: ActiveLaser): void {
     this.activeLasers.push(laser);
-    this.frozenOwnerIds.add(laser.ownerId);
+    if (this.level.id !== 3 && this.level.id !== 4) {
+      this.frozenOwnerIds.add(laser.ownerId);
+    }
     if (!laser.isTelegraph) {
       this.eventBus.emit('LASER_FIRED', {
         laserId: laser.id,
@@ -995,8 +1079,8 @@ export class SimulationEngine {
   }
 
   private triggerEnemyAttack(): void {
-    if (this.level.id === 3) {
-      // In Level 3, Enemy i does not fire lasers; it relies on state cycling, penetration, and reflection
+    if (this.level.id === 3 || this.level.id === 4) {
+      // In Level 3 & 4, custom mechanics handle enemy attacks
       return;
     }
 
@@ -1031,6 +1115,9 @@ export class SimulationEngine {
    * Player or AI manual trigger for special skills
    */
   triggerSkill(team: 'LEFT' | 'RIGHT'): boolean {
+    if (this.level.id === 4 && team === 'LEFT') {
+      return false; // Player has no ranged attacks or skills in Level 4
+    }
     const entity = team === 'LEFT' ? this.leftEntity : this.rightEntity;
     if (entity.isDead || !entity.isReady()) return false;
 
@@ -1299,7 +1386,9 @@ export class SimulationEngine {
   private recalcFrozenOwners(): void {
     this.frozenOwnerIds.clear();
     for (const laser of this.activeLasers) {
-      this.frozenOwnerIds.add(laser.ownerId);
+      if (this.level.id !== 3 && this.level.id !== 4) {
+        this.frozenOwnerIds.add(laser.ownerId);
+      }
     }
   }
 }

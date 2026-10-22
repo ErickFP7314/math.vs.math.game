@@ -277,6 +277,8 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
           activeSpheresCount={engine.subEntities.length + (engine.rightEntity.isDead ? 0 : 1)}
           levelId={levelId}
           derivativeHitCount={engine.derivativeHitCount}
+          engineStatus={engine.status}
+          isTelegraphing={engine.activeLasers.some((l) => l.isTelegraph && l.ownerId === engine.rightEntity.id)}
         />
 
         {/* Floating Post-Match Winner Announcement (3s delay before modal, pure text, no window background) */}

@@ -11,6 +11,8 @@ interface HPBarProps {
   activeSpheresCount: number;
   levelId?: number;
   derivativeHitCount?: number;
+  engineStatus?: 'COUNTDOWN' | 'COMBAT' | 'VICTORY' | 'DEFEAT' | 'PAUSED';
+  isTelegraphing?: boolean;
 }
 
 export const HPBar: React.FC<HPBarProps> = ({
@@ -20,6 +22,8 @@ export const HPBar: React.FC<HPBarProps> = ({
   activeSpheresCount,
   levelId = 1,
   derivativeHitCount = 0,
+  engineStatus = 'COMBAT',
+  isTelegraphing = false,
 }) => {
   const { t, language } = useLanguage();
   const { theme } = useTheme();
@@ -58,13 +62,20 @@ export const HPBar: React.FC<HPBarProps> = ({
 
   // Determine dynamic badge for right entity
   const getRightBadge = () => {
+    if (engineStatus === 'COUNTDOWN') return `[${t.ready}]`;
     if (rightEntity.hasStatus('BURN')) return `[${t.onFire}]`;
     if (rightEntity.isImmuneToDerivative && levelId === 2) return `[${t.blade}]`;
+
+    if (levelId === 4) {
+      if (leftEntity.hasStatus('BURN')) return `[${t.burning}]`;
+      if (isTelegraphing || rightEntity.tag === 'TELEGRAPH') return `[${t.expBlade}]`;
+      return `[Cooldown ${Math.ceil(rightEntity.cooldownRemaining)}s]`;
+    }
 
     if (levelId === 1) {
       return isKo ? `[공 ${activeSpheresCount}개]` : `[${activeSpheresCount} ${t.spheresCount}]`;
     }
-    if (levelId === 2 || levelId === 4 || levelId === 6 || levelId === 8) {
+    if (levelId === 2 || levelId === 6 || levelId === 8) {
       return `[${t.blade}]`;
     }
     if (levelId === 5) {
@@ -96,6 +107,7 @@ export const HPBar: React.FC<HPBarProps> = ({
   };
 
   const getLeftBadge = () => {
+    if (engineStatus === 'COUNTDOWN') return `[${t.ready}]`;
     if (leftEntity.hasStatus('BURN')) return `[${t.onFire}]`;
     if (levelId === 1) {
       const count = Math.max(1, derivativeHitCount);

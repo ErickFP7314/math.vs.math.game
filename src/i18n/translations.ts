@@ -29,6 +29,7 @@ export interface Translations {
   vs: string;
   ready: string;
   onFire: string;
+  burning: string;
   immune: string;
   graphInvoke: string;
   expBlade: string;
@@ -77,6 +78,7 @@ export const translations: Record<Language, Translations> = {
     vs: 'VS',
     ready: 'READY',
     onFire: 'On Fire!',
+    burning: 'Burning!',
     immune: 'Immune!',
     graphInvoke: 'Graph Invocation!',
     expBlade: 'Exponential Blade!',
@@ -85,7 +87,7 @@ export const translations: Record<Language, Translations> = {
     cosineWave: 'Cosine Wave!',
     integralWhip: 'Integral Whip!',
     integralWhipReady: '∫ Whip Ready!',
-    partialYReady: 'Ready for ∂/∂y',
+    partialYReady: 'Ready to partially differentiate with respect to y',
     spheresCount: 'Balls',
     derivationsCount: 'Derivative',
     derivativeAttempt: 'Derivative Attempt',
@@ -214,6 +216,7 @@ export const translations: Record<Language, Translations> = {
     vs: 'VS',
     ready: 'LISTO',
     onFire: '¡En llamas!',
+    burning: '¡Quemando!',
     immune: '¡Inmune!',
     graphInvoke: '¡Invocación de Gráfico!',
     expBlade: '¡Cuchilla Exponencial!',
@@ -222,7 +225,7 @@ export const translations: Record<Language, Translations> = {
     cosineWave: '¡Onda Coseno!',
     integralWhip: '¡Látigo Integral!',
     integralWhipReady: '¡Látigo ∫ Listo!',
-    partialYReady: 'Listo para ∂/∂y',
+    partialYReady: 'Preparado para derivar parcialmente respecto a y',
     spheresCount: 'Bolas',
     derivationsCount: 'Derivada',
     derivativeAttempt: 'Intento de Derivada',
@@ -351,6 +354,7 @@ export const translations: Record<Language, Translations> = {
     vs: 'VS',
     ready: '준비',
     onFire: '화상 중!',
+    burning: '연소 중!',
     immune: '미분 면역!',
     graphInvoke: '그래프 소환!',
     expBlade: '지수 칼날!',
@@ -359,7 +363,7 @@ export const translations: Record<Language, Translations> = {
     cosineWave: '코사인파!',
     integralWhip: '∫ 채찍!',
     integralWhipReady: '∫ 채찍 준비!',
-    partialYReady: 'y 편미분 준비',
+    partialYReady: 'y에 대해 편미분할 준비 완료',
     spheresCount: '공',
     derivationsCount: '미분',
     derivativeAttempt: '미분 시도',

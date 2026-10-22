@@ -47,13 +47,14 @@ export const MathInfoScreen: React.FC<MathInfoScreenProps> = ({
   const { t, language } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
+  const isEs = language === 'es';
+  const isKo = language === 'ko';
 
   // Interactive state per level
   const [powerN, setPowerN] = useState<number>(3);
   const [powerX, setPowerX] = useState<number>(1.2);
   const [expX, setExpX] = useState<number>(1.0);
   const [imagPower, setImagPower] = useState<number>(0);
-  const [partialY, setPartialY] = useState<number>(2.0);
   const [trigPhase, setTrigPhase] = useState<number>(0);
   const [integralC, setIntegralC] = useState<number>(3);
   const [waveAmp, setWaveAmp] = useState<number>(1.5);
@@ -174,60 +175,69 @@ export const MathInfoScreen: React.FC<MathInfoScreenProps> = ({
           : 'Striking e^x inflicts no direct damage. Maintain distance and strike strategically with your Tangent Slash.',
       },
       3: {
-        mainFormula: 'i^0 = 1,\\; i^1 = i,\\; i^2 = -1,\\; i^3 = -i,\\; i^4 = 1',
+        mainFormula: 'f(x) = e^x \\quad \\text{vs.} \\quad i \\in \\mathbb{C}\\; (i^2 = -1)',
         theoremName: isEs
-          ? 'Ciclo Cuaternario en el Plano Complejo'
+          ? 'Crecimiento Asintótico vs. Ciclo Cuaternario de Euler'
           : isKo
-          ? '복소 평면의 4주기 순환'
-          : '4-Periodic Cycle in the Complex Plane',
+          ? '점근적 지수 성장 vs. 오일러 4주기 복소 순환'
+          : 'Asymptotic Exponential Growth vs. Euler 4-Cycle',
         explanation: isEs
-          ? 'Multiplicar por la unidad imaginaria i equivale a una rotación de 90° (π/2 radianes) en sentido antihorario en el plano complejo de Argand.'
+          ? 'eˣ despliega una cuchilla exponencial cuya potencia escala con su tasa de crecimiento y aplica quemadura continua en su asíntota plana. Mientras tanto, la unidad imaginaria i cicla por 4 cuadrantes del plano complejo, alternando entre intangibilidad espectral (en el eje imaginario) y reflexión total con inversión de daño (en el eje real negativo).'
           : isKo
-          ? '허수 단위 i를 곱하는 것은 아르강 복소 평면에서 반시계 방향으로 90°(π/2 라디안) 회전하는 것과 같습니다.'
-          : 'Multiplying by the imaginary unit i represents a 90° (π/2 rad) counter-clockwise rotation in the complex Argand plane.',
+          ? 'eˣ는 성장률에 따라 위력이 증가하며 평평한 점근선에서 지속 화상을 부여하는 지수 칼날을 전개합니다. 허수단위 i는 복소 평면의 4개 사분면을 순환하며 허수축에서의 유령 관통과 음의 실수축에서의 완전 반사 및 화상 역전을 번갈아 수행합니다.'
+          : 'eˣ wields an exponential blade scaling with its growth rate and applying burning DoT along its flat asymptote. Meanwhile, the imaginary unit i cycles through 4 quadrants of the complex plane, toggling between spectral intangibility (on the imaginary axis) and total reflection with burn inversion (on the negative real axis).',
         breakdownList: [
           {
-            title: 'Fase i (Pierce)',
-            math: 'i^1 = i',
+            title: isEs ? 'Fase [i] — Eje Imaginario (+90°)' : isKo ? '위상 [i] — 허수축 (+90°)' : 'Phase [i] — Imaginary Axis (+90°)',
+            math: 'i^1 = i \\quad (\\theta = \\pi/2)',
             desc: isEs
-              ? 'Modo espectral: atraviesa defensas e inflige daño penetrante.'
+              ? 'Intangible (Fantasma): Al residir puramente en el eje imaginario fuera de la recta real física, no tiene rebote elástico. Atraviesa al jugador infligiendo -8 HP de daño de contacto, pero es vulnerable al corte y a la quemadura.'
               : isKo
-              ? '영체 관통 모드: 방어를 무시하고 관통 피해를 입힙니다.'
-              : 'Ghost pierce mode: bypasses defenses and deals piercing damage.',
+              ? '유령 관통 (Intangible): 물리적 실수축을 벗어나 탄성 충돌 없이 플레이어를 통과하며 -8 HP의 접촉 피해를 입힙니다. 단, 지수 칼날과 화상에는 취약합니다.'
+              : 'Spectral Intangibility: Residing purely on the imaginary axis off the physical real line, it lacks elastic bounce. Pierces through the player dealing -8 HP contact damage, but remains vulnerable to blade and burn.',
           },
           {
-            title: 'Fase -1 (Reflect)',
-            math: 'i^2 = -1',
+            title: isEs ? 'Fase [-1] — Inversor de Signo (180°)' : isKo ? '위상 [-1] — 부호 반전 (180°)' : 'Phase [-1] — Sign Reversal (180°)',
+            math: 'i^2 = -1 \\quad (\\theta = \\pi)',
             desc: isEs
-              ? 'Inversión de signo: refleja los ataques enemigos.'
+              ? 'Sólido + Reflexión: Número real negativo. Rebote elástico normal (0 daño). Refleja el 100% del daño de la cuchilla exponencial de vuelta al jugador e invierte la Quemadura (+2 HP de cura para sí, -2 HP de daño al jugador).'
               : isKo
-              ? '부호 반전: 적의 공격을 반사합니다.'
-              : 'Sign reversal: reflects hostile projectile force.',
+              ? '고체 반사 + 화상 역전: 음의 실수. 정상 탄성 충돌(0 피해). 지수 칼날 데미지를 100% 반사하고 화상 피해를 역전시킵니다 (자신은 +2 HP 회복, 플레이어에게 -2 HP 피해).'
+              : 'Solid + Reflection: Negative real number. Standard elastic bounce (0 contact damage). Reflects 100% blade damage back to player and inverts Burn DoT (+2 HP self heal, -2 HP damage to player).',
           },
           {
-            title: 'Fase -i',
-            math: 'i^3 = -i',
+            title: isEs ? 'Fase [-i] — Intangible + Reflector (270°)' : isKo ? '위상 [-i] — 관통 + 반사 복합 (270°)' : 'Phase [-i] — Intangible + Reflector (270°)',
+            math: 'i^3 = -i \\quad (\\theta = 3\\pi/2)',
             desc: isEs
-              ? 'Rotación de 270°: combinación de penetración y rechazo.'
+              ? 'Fusión Cuaternaria: Combina la inmaterialidad física (atraviesa sin rebote causando -8 HP de daño de contacto) con el poder reflexivo del factor -1 (refleja la cuchilla e invierte los ticks de quemadura).'
               : isKo
-              ? '270° 회전: 관통과 반사의 복합 상태.'
-              : '270° rotation: dual combination of pierce and reflection.',
+              ? '사원 복합 상태: 비물질성(비탄성 관통, -8 HP 접촉 피해)과 -1의 반사 특성(칼날 반사 및 화상 역전)을 동시에 가집니다.'
+              : 'Dual Fusion: Combines physical intangibility (pierces without bounce, -8 HP contact damage) with the -1 reflection factor (reflects blade and inverts burn ticks).',
           },
           {
-            title: 'Fase 1',
-            math: 'i^4 = 1',
+            title: isEs ? 'Fase [1] — Identidad Real (0° / 360°)' : isKo ? '위상 [1] — 실수 항등원 (0° / 360°)' : 'Phase [1] — Real Identity (0° / 360°)',
+            math: 'i^4 = 1 \\quad (\\theta = 2\\pi)',
             desc: isEs
-              ? 'Ciclo completo (360°): retorno al estado base real.'
+              ? 'Estado Neutro: Retorno a la materia sólida física ordinaria (rebote elástico, 0 daño de contacto). Completamente vulnerable tanto a la Cuchilla Exponencial como al DoT de Quemadura estándar.'
               : isKo
-              ? '완전한 주기(360°): 실수 기본 상태로 복귀.'
-              : 'Full 360° period: returns to the baseline real identity.',
+              ? '실수 항등 상태: 일반 물리 고체로 복귀(탄성 충돌, 0 접촉 피해). 지수 칼날과 일반 화상 DoT에 완전히 취약합니다.'
+              : 'Real Identity: Return to standard solid matter (elastic bounce, 0 contact damage). Fully vulnerable to both the Exponential Blade and standard Burn DoT.',
+          },
+          {
+            title: isEs ? 'Cuchilla Exponencial eˣ — Asíntota y Quemadura' : isKo ? '지수 칼날 eˣ — 점근선과 화상' : 'Exponential Blade eˣ — Asymptote & Burn',
+            math: 'y = e^{(x - x_0) \\cdot 0.15}, \\quad \\lim_{x \\to -\\infty} e^x = 0',
+            desc: isEs
+              ? 'Daño escalable (4 a 21 HP) según la coordenada X. Si el corte impacta en la sección asintótica plana (x ≤ 0), aplica Quemadura DoT durante 3 segundos (-2 HP cada 0.5s).'
+              : isKo
+              ? 'X 좌표에 따라 4 HP에서 21 HP까지 가변 데미지. 평평한 점근선 영역(x ≤ 0)에서 적중 시 3초간 지속 화상(-2 HP / 0.5초)을 부여합니다.'
+              : 'Scalable damage (4 to 21 HP) based on X coordinate. Impact in the flat asymptotic section (x ≤ 0) inflicts 3s Burn DoT (-2 HP per 0.5s).',
           },
         ],
         mechanicSummary: isEs
-          ? 'La esfera de i cambia de fase cada 3 segundos. Su estado de color y aura indica si atraviesa o refleja el daño en combate.'
+          ? 'eˣ debe apuntar al enemigo en las fases vulnerables ([i] y [1]) y evitar disparar durante las fases reflexivas ([-1] y [-i]) para no autodestruirse. Además, i atraviesa a eˣ infligiendo -8 HP en sus estados imaginarios.'
           : isKo
-          ? 'i 구체는 3초마다 위상을 변경합니다. 구체의 색상과 오라가 관통 또는 반사 상태를 시각적으로 알립니다.'
-          : 'The i sphere cycles phases every 3 seconds. Aura colors signal ghost piercing vs damage reflection.',
+          ? 'eˣ는 취약 위상([i], [1])을 노려 공격해야 하며, 반사 위상([-1], [-i]) 동안에는 자폭을 방지하기 위해 칼날을 아껴야 합니다. 또한 i는 허수 상태에서 eˣ를 관통하며 -8 HP를 깎습니다.'
+          : 'eˣ must strike during vulnerable phases ([i] and [1]) and hold fire during reflection phases ([-1] and [-i]) to avoid self-inflicted damage. Additionally, i pierces eˣ dealing -8 HP in its imaginary states.',
       },
       4: {
         mainFormula: '\\frac{\\partial}{\\partial y}\\left(e^x\\right) = 0',
@@ -237,26 +247,44 @@ export const MathInfoScreen: React.FC<MathInfoScreenProps> = ({
           ? '독립 변수의 직교 미분'
           : 'Orthogonality of Independent Variables',
         explanation: isEs
-          ? 'En cálculo multivariable, al diferenciar parcialmente respecto a y, la variable x se trata como una constante absoluta. La derivada de una constante es 0.'
+          ? 'En cálculo multivariable, al diferenciar parcialmente respecto a y, la variable x se trata como una constante absoluta. Como eˣ depende únicamente de x y carece de variable y, su derivada parcial respecto a y es idénticamente 0.'
           : isKo
-          ? '다변수 미적분학에서 y에 대해 편미분할 때 x는 엄격한 상수로 취급됩니다. 상수의 미분은 0입니다.'
-          : 'In multivariable calculus, differentiating partially with respect to y treats x as a strict constant. The derivative of a constant is identically zero.',
+          ? '다변수 미적분학에서 y에 대해 편미분할 때 변수 x는 절대 상수로 취급됩니다. eˣ는 오직 x에만 의존하고 y 성분이 전혀 없으므로, y에 대한 편미분값은 항등적으로 0입니다.'
+          : 'In multivariable calculus, when partially differentiating with respect to y, the variable x is treated as an absolute constant. Since eˣ depends solely on x and contains no y variable, its partial derivative with respect to y is identically 0.',
         breakdownList: [
           {
-            title: isEs ? 'Aniquilación Crítica' : isKo ? '치명적 절멸' : 'Critical Annihilation',
-            math: '\\frac{\\partial}{\\partial y}(e^x) = 0 \\implies -80\\text{ HP}',
+            title: isEs ? 'Aniquilación Instantánea por Contacto (One-Shot)' : isKo ? '직접 충돌 시 즉각 소멸 (원샷)' : 'Instant Contact Annihilation (One-Shot)',
+            math: '\\frac{\\partial}{\\partial y}(e^x) = 0 \\implies -80\\text{ HP}\\; (100\\%)',
             desc: isEs
-              ? 'El corte ortogonal desintegra la función exponencial de un solo impacto.'
+              ? 'Al chocar físicamente cuerpo a cuerpo, el operador ∂/∂y evalúa la constante eˣ y la desintegra instantáneamente forzando sus 80 HP a 0 en un solo toque (el jugador recibe 0 de daño).'
               : isKo
-              ? '직교 편미분 타격으로 지수 함수가 단 한 번에 80 HP 피해를 입고 쓰러집니다.'
-              : 'An orthogonal slice instantly annihilates e^x with a massive 80 HP one-shot blow.',
+              ? '물리적 접촉 충돌 시 ∂/∂y 연산자는 상수 eˣ를 즉시 0으로 미분하여 단 한 번의 접촉으로 eˣ의 80 HP 전량을 즉각 소멸시킵니다(플레이어 피해 0).'
+              : 'Upon physical body contact, the ∂/∂y operator evaluates the constant eˣ and instantly disintegrates it, forcing all 80 HP to 0 in a single strike (player takes 0 damage).',
+          },
+          {
+            title: isEs ? 'Sin Ataques a Distancia' : isKo ? '원거리 투사체 없음' : 'Zero Ranged Projectiles',
+            math: '\\text{Cooldown: Ninguno (0s)}',
+            desc: isEs
+              ? 'El jugador carece de proyectiles, láseres o disparos a distancia. Su única arma es su habilidad pasiva por contacto directo.'
+              : isKo
+              ? '플레이어는 원거리 레이저나 발사체가 없으며 쿨다운도 없습니다. 유일한 무기는 직접 충돌 시 발동하는 접촉 패시브입니다.'
+              : 'The player possesses no projectiles, lasers, or ranged attacks, nor any cooldown. Its sole weapon is direct physical contact.',
+          },
+          {
+            title: isEs ? 'Cuchilla Exponencial Enemiga y Quemadura' : isKo ? '적 eˣ의 지수 칼날과 화상' : 'Enemy eˣ Exponential Blade & Burn',
+            math: '4\\text{ HP} + 5 \\times (-2\\text{ HP}) = -14\\text{ HP}',
+            desc: isEs
+              ? 'eˣ espera 1s de cooldown inicial (3s loop), traza su curva durante 1s (inofensiva durante el trazado) y dispara. Un corte plano resta -4 HP e inflige Quemadura DoT (primer tick inmediato de -2 HP y 4 ticks más de -2 HP cada 0.75s, reduciendo la vida de 100 a 86 HP).'
+              : isKo
+              ? 'eˣ는 경기 시작 후 1초(이후 3초 주기) 뒤 1초간 곡선을 추적(추적 중 무해)한 뒤 발사합니다. 평평한 칼날에 적중 시 -4 HP와 즉시 -2 HP 화상, 이후 0.75초마다 4회 추가 화상으로 총 100→86 HP로 감소합니다.'
+              : 'eˣ waits 1s initial cooldown (3s loop), tracks its curve for 1s (harmless during telegraph), then fires. A flat cut inflicts -4 HP plus Burn DoT (immediate -2 HP tick and 4 more ticks every 0.75s, reducing HP from 100 to 86 HP).',
           },
         ],
         mechanicSummary: isEs
-          ? 'Juegas como ∂/∂y. Un solo golpe directo a e^x termina la partida con una victoria contundente. Pero ten cuidado: e^x te atacará con proyectiles antes de que puedas tocarlo.'
+          ? 'Como ∂/∂y, debes perseguir y hacer contacto físico directo con eˣ para ejecutar tu One-Shot instantáneo, mientras esquivas los cortes telegrafiados de su Cuchilla Exponencial que causan hasta 14 HP de daño acumulado.'
           : isKo
-          ? '플레이어는 ∂/∂y입니다. e^x에 단 한 번만 접촉하면 즉시 승리합니다. 다만 거리를 좁히는 동안 적의 원거리 레이저를 피해야 합니다.'
-          : 'You play as ∂/∂y. A single physical touch on e^x triggers a devastating one-shot KO. Dodge its ranged blades to get in close.',
+          ? '∂/∂y로서 플레이어는 최대 14 HP의 데미지를 입히는 지수 칼날을 피하며 eˣ와 직접 충돌하여 원샷 KO를 달성해야 합니다.'
+          : 'As ∂/∂y, you must chase and physically collide with eˣ to land your instant One-Shot KO, while evading the telegraphed Exponential Blade that inflicts up to 14 total damage.',
       },
       5: {
         mainFormula: '\\frac{d}{dx}\\sin(x) = \\cos(x),\\quad \\frac{d}{dx}\\cos(x) = -\\sin(x)',
@@ -838,50 +866,112 @@ export const MathInfoScreen: React.FC<MathInfoScreenProps> = ({
                   </div>
                 )}
 
-                {selectedLevel === 3 && (
-                  <div className="w-full space-y-4">
-                    <div className="text-center space-y-1">
-                      <div className="text-xs font-mono text-slate-400">
-                        <KatexBlock formula={`i^{${imagPower}} = ${['1', 'i', '-1', '-i'][imagPower % 4]}`} />
+                {selectedLevel === 3 && (() => {
+                  const phases = [
+                    {
+                      name: 'i',
+                      angle: 90,
+                      label: isEs ? 'Fase [i]: Intangible (+90°)' : isKo ? '위상 [i]: 유령 관통 (+90°)' : 'Phase [i]: Intangible (+90°)',
+                      formula: 'i^1 = i',
+                      collision: isEs ? 'Intangible: Atraviesa sin rebote (-8 HP al jugador)' : isKo ? '유령 관통: 비탄성 통과 (-8 HP 플레이어 피해)' : 'Intangible: Pierces without bounce (-8 HP)',
+                      laser: isEs ? 'Vulnerable a Cuchilla Exponencial y Quemadura' : isKo ? '지수 칼날 및 지속 화상에 취약' : 'Vulnerable to Exponential Blade and Burn DoT',
+                      color: 'text-pink-400',
+                    },
+                    {
+                      name: '-1',
+                      angle: 180,
+                      label: isEs ? 'Fase [-1]: Reflejo Total (180°)' : isKo ? '위상 [-1]: 완전 반사 (180°)' : 'Phase [-1]: Total Reflection (180°)',
+                      formula: 'i^2 = -1',
+                      collision: isEs ? 'Sólido: Rebote elástico normal (0 daño)' : isKo ? '고체: 정상 탄성 충돌 (0 피해)' : 'Solid: Standard elastic bounce (0 damage)',
+                      laser: isEs ? 'Refleja 100% cuchilla al jugador e invierte Quemadura (+2 HP cura / -2 HP jugador)' : isKo ? '칼날 100% 반사 및 화상 역전 (+2 HP 회복 / -2 HP 플레이어)' : 'Reflects 100% blade to player, inverts Burn (+2 HP heal / -2 HP player)',
+                      color: 'text-rose-400',
+                    },
+                    {
+                      name: '-i',
+                      angle: 270,
+                      label: isEs ? 'Fase [-i]: Intangible + Reflejo (270°)' : isKo ? '위상 [-i]: 관통 + 반사 (270°)' : 'Phase [-i]: Intangible + Reflect (270°)',
+                      formula: 'i^3 = -i',
+                      collision: isEs ? 'Intangible: Atraviesa sin rebote (-8 HP al jugador)' : isKo ? '유령 관통: 비탄성 통과 (-8 HP 플레이어 피해)' : 'Intangible: Pierces without bounce (-8 HP)',
+                      laser: isEs ? 'Refleja 100% cuchilla e invierte Quemadura (+2 HP cura / -2 HP jugador)' : isKo ? '칼날 100% 반사 및 화상 역전 (+2 HP 회복 / -2 HP 플레이어)' : 'Reflects 100% blade, inverts Burn (+2 HP heal / -2 HP player)',
+                      color: 'text-fuchsia-400',
+                    },
+                    {
+                      name: '1',
+                      angle: 0,
+                      label: isEs ? 'Fase [1]: Identidad Real (0° / 360°)' : isKo ? '위상 [1]: 실수 항등원 (0° / 360°)' : 'Phase [1]: Real Identity (0° / 360°)',
+                      formula: 'i^4 = 1',
+                      collision: isEs ? 'Sólido: Rebote elástico normal (0 daño)' : isKo ? '고체: 정상 탄성 충돌 (0 피해)' : 'Solid: Standard elastic bounce (0 damage)',
+                      laser: isEs ? 'Vulnerable a Cuchilla Exponencial y Quemadura ordinaria' : isKo ? '지수 칼날 및 일반 화상에 취약' : 'Vulnerable to Exponential Blade and standard Burn',
+                      color: 'text-cyan-400',
+                    },
+                  ];
+                  const cur = phases[imagPower % 4];
+                  const rad = (cur.angle * Math.PI) / 180;
+                  const px = Math.cos(rad) * 32;
+                  const py = -Math.sin(rad) * 32;
+
+                  return (
+                    <div className="w-full space-y-4">
+                      <div className="text-center space-y-1">
+                        <div className="text-xs font-mono text-slate-400">
+                          <KatexBlock formula={cur.formula} />
+                        </div>
+                        <div className={`text-base sm:text-lg font-mono font-black ${cur.color}`}>
+                          {cur.label}
+                        </div>
                       </div>
-                      <div className="text-lg font-mono font-black text-pink-400">
-                        <KatexBlock
-                          formula={`\\text{Fase } ${['1', 'i', '-1', '-i'][imagPower % 4]} \\;(\\theta = ${(
-                            (imagPower % 4) * 90
-                          )}^\\circ)`}
-                        />
+
+                      <svg viewBox="-50 -50 100 100" className="w-full h-36 bg-black/30 rounded-lg">
+                        <circle cx="0" cy="0" r="32" fill="none" stroke="#475569" strokeWidth="1" strokeDasharray="3,3" />
+                        <line x1="-45" y1="0" x2="45" y2="0" stroke="#64748B" strokeWidth="1" />
+                        <line x1="0" y1="-45" x2="0" y2="45" stroke="#64748B" strokeWidth="1" />
+                        <text x="36" y="-4" fill="#94A3B8" fontSize="8" fontFamily="monospace">Re</text>
+                        <text x="4" y="-36" fill="#94A3B8" fontSize="8" fontFamily="monospace">Im</text>
+                        <line x1="0" y1="0" x2={px} y2={py} stroke="#EC4899" strokeWidth="3" />
+                        <circle cx={px} cy={py} r="5" fill="#F43F5E" />
+                      </svg>
+
+                      <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+                        <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800">
+                          <span className="text-slate-400 block font-bold mb-1">
+                            {isEs ? 'Colisión Física:' : isKo ? '물리적 충돌:' : 'Physics Collision:'}
+                          </span>
+                          <span className="text-slate-200">{cur.collision}</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800">
+                          <span className="text-slate-400 block font-bold mb-1">
+                            {isEs ? 'Láser eˣ & Quemadura:' : isKo ? 'eˣ 레이저 & 화상:' : 'eˣ Laser & Burn:'}
+                          </span>
+                          <span className="text-slate-200">{cur.laser}</span>
+                        </div>
                       </div>
+
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {phases.map((p, idx) => (
+                          <button
+                            key={p.name}
+                            onClick={() => setImagPower(idx)}
+                            className={`py-1.5 rounded-lg border font-mono text-xs font-bold transition-all ${
+                              imagPower % 4 === idx
+                                ? 'bg-pink-500/30 border-pink-500 text-pink-300 shadow-sm'
+                                : 'bg-slate-800/40 border-slate-700/60 text-slate-400 hover:bg-slate-800'
+                            }`}
+                          >
+                            [{p.name}]
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => setImagPower((p) => (p + 1) % 4)}
+                        className="w-full py-2 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 text-pink-400 border border-pink-500/40 font-mono text-xs font-bold transition-all flex items-center justify-center space-x-1.5"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>{language === 'es' ? 'Rotar 90° (× i)' : language === 'ko' ? '90° 회전 (× i)' : 'Rotate 90° (× i)'}</span>
+                      </button>
                     </div>
-
-                    <svg viewBox="-50 -50 100 100" className="w-full h-36 bg-black/30 rounded-lg">
-                      <circle cx="0" cy="0" r="32" fill="none" stroke="#475569" strokeWidth="1" strokeDasharray="3,3" />
-                      <line x1="-45" y1="0" x2="45" y2="0" stroke="#64748B" strokeWidth="1" />
-                      <line x1="0" y1="-45" x2="0" y2="45" stroke="#64748B" strokeWidth="1" />
-                      <text x="36" y="-4" fill="#94A3B8" fontSize="8" fontFamily="monospace">Re</text>
-                      <text x="4" y="-36" fill="#94A3B8" fontSize="8" fontFamily="monospace">Im</text>
-                      {(() => {
-                        const phase = imagPower % 4;
-                        const angle = phase * (Math.PI / 2);
-                        const px = Math.cos(angle) * 32;
-                        const py = -Math.sin(angle) * 32;
-                        return (
-                          <>
-                            <line x1="0" y1="0" x2={px} y2={py} stroke="#EC4899" strokeWidth="3" />
-                            <circle cx={px} cy={py} r="5" fill="#F43F5E" />
-                          </>
-                        );
-                      })()}
-                    </svg>
-
-                    <button
-                      onClick={() => setImagPower((p) => (p + 1) % 4)}
-                      className="w-full py-2 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 text-pink-400 border border-pink-500/40 font-mono text-xs font-bold transition-all flex items-center justify-center space-x-1.5"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>{language === 'es' ? 'Rotar 90° (× i)' : language === 'ko' ? '90° 회전 (× i)' : 'Rotate 90° (× i)'}</span>
-                    </button>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {selectedLevel === 4 && (
                   <div className="w-full space-y-4">
@@ -890,33 +980,39 @@ export const MathInfoScreen: React.FC<MathInfoScreenProps> = ({
                         <KatexBlock formula="f(x, y) = e^x \implies \frac{\partial}{\partial y}(e^x) \equiv 0" />
                       </div>
                       <div className="text-xl font-mono font-black text-emerald-400">
-                        <KatexBlock formula="\\Delta z / \\Delta y = 0 \\quad \\text{[Plano Horizontal]}" />
+                        <KatexBlock formula="\frac{\partial}{\partial y} e^x = 0 \quad \text{[-80 HP One-Shot]}" />
                       </div>
                     </div>
 
-                    <div className="relative w-full h-32 bg-slate-900/80 rounded-lg flex items-center justify-center border border-slate-800">
-                      <div className="text-center space-y-1">
-                        <span className="text-xs font-mono text-emerald-400 font-bold block">
-                          Pendiente ∂/∂y = 0.00
-                        </span>
-                        <div className="w-48 h-3 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full mx-auto" />
-                        <span className="text-[11px] font-mono text-slate-400 block">
-                          Totalmente plano en el eje Y
-                        </span>
+                    <div className="p-3 bg-slate-900/80 rounded-lg border border-slate-800 text-xs font-mono space-y-2">
+                      <div className="flex items-center justify-between text-emerald-400 font-bold border-b border-slate-800 pb-1.5">
+                        <span>{isEs ? 'Contacto Directo (Cuerpo a Cuerpo):' : isKo ? '직접 접촉 충돌 (원샷):' : 'Direct Body Collision (One-Shot):'}</span>
+                        <span>0 / 80 HP</span>
                       </div>
+                      <p className="text-slate-300 text-[11px] leading-relaxed">
+                        {isEs
+                          ? 'Al no poseer variable y, eˣ se comporta como una constante respecto a ∂/∂y. El primer choque físico ejecuta un One-Shot de -80 HP sin que el jugador sufra daño.'
+                          : isKo
+                          ? 'y 변수가 없으므로 eˣ는 ∂/∂y에 대해 상수로 취급됩니다. 첫 충돌 시 플레이어 피해 없이 eˣ에게 -80 HP 원샷 KO를 가합니다.'
+                          : 'Lacking any y variable, eˣ behaves as an absolute constant to ∂/∂y. First physical collision triggers a -80 HP instant One-Shot KO with 0 player recoil.'}
+                      </p>
                     </div>
 
-                    <div className="flex items-center justify-between text-xs font-mono">
-                      <span>Desplazamiento y: {partialY.toFixed(1)}</span>
-                      <input
-                        type="range"
-                        min="-5"
-                        max="5"
-                        step="0.5"
-                        value={partialY}
-                        onChange={(e) => setPartialY(parseFloat(e.target.value))}
-                        className="w-32 accent-emerald-400"
-                      />
+                    <div className="p-3 bg-slate-900/80 rounded-lg border border-rose-900/40 text-xs font-mono space-y-1.5">
+                      <div className="flex items-center justify-between text-rose-400 font-bold">
+                        <span>{isEs ? 'Cuchilla Exponencial de eˣ:' : isKo ? 'eˣ의 지수 칼날 공격:' : 'eˣ Exponential Blade Attack:'}</span>
+                        <span>-14 HP Total</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300">
+                        <div className="p-2 bg-black/40 rounded border border-slate-800">
+                          <span className="text-rose-400 block font-bold">{isEs ? 'Impacto + 1er Tick:' : isKo ? '적중 + 즉시 1틱:' : 'Impact + 1st Tick:'}</span>
+                          <span>-4 HP + -2 HP = -6 HP (100 → 94)</span>
+                        </div>
+                        <div className="p-2 bg-black/40 rounded border border-slate-800">
+                          <span className="text-amber-400 block font-bold">{isEs ? '4 Ticks Quemadura:' : isKo ? '추가 4회 화상:' : '4 Burn Ticks:'}</span>
+                          <span>4 × -2 HP cada 0.75s (94 → 86)</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
