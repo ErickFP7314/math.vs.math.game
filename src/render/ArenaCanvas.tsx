@@ -245,7 +245,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
           ctx.shadowColor = ctx.strokeStyle;
           ctx.shadowBlur = 8;
           for (let step = 0; step < 80; step += 2) {
-            const waveY = p.y + Math.sin(step * 0.2) * 12;
+            const waveY = p.y + (laser.curveType === 'COSINE' ? Math.cos(step * 0.2) * 12 : Math.sin(step * 0.2) * 12);
             const waveX = p.x + (laser.ownerId === engine.leftEntity.id ? step * 3 : -step * 3);
             if (step === 0) ctx.moveTo(waveX, waveY);
             else ctx.lineTo(waveX, waveY);

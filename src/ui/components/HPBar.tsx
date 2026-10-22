@@ -29,6 +29,7 @@ export const HPBar: React.FC<HPBarProps> = ({
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const isKo = language === 'ko';
+  const isEs = language === 'es';
 
   const [shakingLeft, setShakingLeft] = useState(false);
   const [shakingRight, setShakingRight] = useState(false);
@@ -62,7 +63,7 @@ export const HPBar: React.FC<HPBarProps> = ({
 
   // Determine dynamic badge for right entity
   const getRightBadge = () => {
-    if (engineStatus === 'COUNTDOWN') return `[${t.ready}]`;
+    if (engineStatus === 'COUNTDOWN') return levelId === 5 ? '[READY]' : `[${t.ready}]`;
     if (rightEntity.hasStatus('BURN')) return `[${t.onFire}]`;
     if (rightEntity.isImmuneToDerivative && levelId === 2) return `[${t.blade}]`;
 
@@ -79,11 +80,8 @@ export const HPBar: React.FC<HPBarProps> = ({
       return `[${t.blade}]`;
     }
     if (levelId === 5) {
-      const ampStr = rightEntity.amplitude > 1 ? `${rightEntity.amplitude}` : '';
-      const freqStr = rightEntity.frequency > 1 ? `${rightEntity.frequency}x` : 'x';
-      const funcName = rightEntity.symbol.replace('x', freqStr);
-      const periodStr = rightEntity.frequency > 1 ? `π = 3.14s` : `2π = 6.28s`;
-      return `[y = ${ampStr}${funcName}] ${periodStr}`;
+      const periodStr = rightEntity.cooldownMax <= 3.14 ? `π = 3.14s` : `2π = 6.28s`;
+      return `[ y = ${rightEntity.symbol} ] ${periodStr}`;
     }
     if (levelId === 7) {
       const ampStr = rightEntity.amplitude > 1 ? `${rightEntity.amplitude}` : '';
@@ -107,15 +105,22 @@ export const HPBar: React.FC<HPBarProps> = ({
   };
 
   const getLeftBadge = () => {
-    if (engineStatus === 'COUNTDOWN') return `[${t.ready}]`;
+    if (engineStatus === 'COUNTDOWN') return levelId === 5 ? '[READY]' : `[${t.ready}]`;
     if (leftEntity.hasStatus('BURN')) return `[${t.onFire}]`;
     if (levelId === 1) {
       const count = Math.max(1, derivativeHitCount);
       return isKo ? `[미분 ${count}회]` : `[${t.derivationsCount} ${count}]`;
     }
-    if (levelId === 2 || levelId === 5) {
+    if (levelId === 2) {
       const count = Math.max(1, derivativeHitCount);
       return isKo ? `[미분 시도 ${count}회]` : `[${t.derivativeAttempt} ${count}]`;
+    }
+    if (levelId === 5) {
+      const count = derivativeHitCount;
+      if (isEs) {
+        return `[Intento de derivación ${count} veces]`;
+      }
+      return isKo ? `[미분 시도 ${count}회]` : `[Derivative attempt ${count} times]`;
     }
     if (levelId === 3) {
       return leftEntity.isReady()
@@ -195,6 +200,20 @@ export const HPBar: React.FC<HPBarProps> = ({
               {rightHp} / {rightMaxHp}
             </span>
           </div>
+          {levelId === 5 && (
+            <div className={`w-full h-1.5 mt-1 rounded-[1px] overflow-hidden ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
+              <div
+                className="h-full bg-blue-500 transition-all duration-75 ease-linear"
+                style={{
+                  width: `${
+                    rightEntity.cooldownMax > 0
+                      ? Math.min(100, Math.max(0, ((rightEntity.cooldownMax - rightEntity.cooldownRemaining) / rightEntity.cooldownMax) * 100))
+                      : 100
+                  }%`,
+                }}
+              />
+            </div>
+          )}
           <div className="text-[11px] font-bold text-[#64748B] mt-1 pr-0.5 tracking-tight">
             {getRightBadge()}
           </div>

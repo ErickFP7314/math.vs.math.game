@@ -148,8 +148,8 @@ describe('SimulationEngine', () => {
 
   it('deals contact collision damage to enemies in standard matches', () => {
     const testBus = new EventBus();
-    const level5 = LevelRegistry.getLevel(5)!;
-    const engine = new SimulationEngine(level5, testBus);
+    const level7 = LevelRegistry.getLevel(7)!;
+    const engine = new SimulationEngine(level7, testBus);
 
     engine.update(3.1);
     const initialEnemyHp = engine.rightEntity.hp;
@@ -459,7 +459,7 @@ describe('SimulationEngine', () => {
     engine.update(1 / 60);
     expect(engine.rightEntity.symbol).toBe('cos x');
     expect(engine.leftEntity.hp).toBe(initialPlayerHp); // Zero contact damage!
-    expect(engine.rightEntity.hp).toBe(86); // 100 - 14
+    expect(engine.rightEntity.hp).toBe(100); // 0 damage to enemy per Level 5 rules!
 
     // Hit 2: d/dx(cos x) = -sin x
     engine.leftEntity.position = engine.rightEntity.position.clone();
@@ -912,6 +912,285 @@ describe('SimulationEngine', () => {
         // No lasers owned by player
         expect(engine.activeLasers.some((l) => l.ownerId === engine.leftEntity.id)).toBe(false);
       }
+    });
+  });
+
+  describe('Level 5 (reglas2/nivel5.md) Specifications', () => {
+    it('Test 1: Total Enemy Immunity and Strict 4-Step Derivative Cycle', () => {
+      const level5 = LevelRegistry.getLevel(5)!;
+      const engine = new SimulationEngine(level5);
+
+      engine.update(3.1); // Enter combat
+
+      expect(engine.leftEntity.symbol).toBe('d/dx');
+      expect(engine.rightEntity.symbol).toBe('sin x');
+      expect(engine.rightEntity.hp).toBe(100);
+      expect(engine.leftEntity.hp).toBe(100);
+      expect(engine.derivativeHitCount).toBe(0);
+
+      // Hit 1: d/dx(sin x) = cos x
+      engine.leftEntity.position = engine.rightEntity.position.clone();
+      engine.update(1 / 60);
+      expect(engine.rightEntity.symbol).toBe('cos x');
+      expect(engine.rightEntity.hp).toBe(100);
+      expect(engine.leftEntity.hp).toBe(100);
+      expect(engine.derivativeHitCount).toBe(1);
+
+      // Hit 2: d/dx(cos x) = -sin x
+      engine.leftEntity.position = engine.rightEntity.position.clone();
+      engine.update(1 / 60);
+      expect(engine.rightEntity.symbol).toBe('-sin x');
+      expect(engine.rightEntity.hp).toBe(100);
+      expect(engine.leftEntity.hp).toBe(100);
+      expect(engine.derivativeHitCount).toBe(2);
+
+      // Hit 3: d/dx(-sin x) = -cos x
+      engine.leftEntity.position = engine.rightEntity.position.clone();
+      engine.update(1 / 60);
+      expect(engine.rightEntity.symbol).toBe('-cos x');
+      expect(engine.rightEntity.hp).toBe(100);
+      expect(engine.leftEntity.hp).toBe(100);
+      expect(engine.derivativeHitCount).toBe(3);
+
+      // Hit 4: d/dx(-cos x) = sin x
+      engine.leftEntity.position = engine.rightEntity.position.clone();
+      engine.update(1 / 60);
+      expect(engine.rightEntity.symbol).toBe('sin x');
+      expect(engine.rightEntity.hp).toBe(100);
+      expect(engine.leftEntity.hp).toBe(100);
+      expect(engine.derivativeHitCount).toBe(4);
+    });
+
+    it('Test 2: Chain Rule Application after Collecting b = 2', () => {
+      const level5 = LevelRegistry.getLevel(5)!;
+      const engine = new SimulationEngine(level5);
+
+      engine.update(3.1); // Enter combat
+
+      // Force 1 collision to reach cos x
+      engine.leftEntity.position = engine.rightEntity.position.clone();
+      engine.update(1 / 60);
+      expect(engine.rightEntity.symbol).toBe('cos x');
+      expect(engine.rightEntity.frequency).toBe(1);
+
+      // Separate player and enemy
+      engine.leftEntity.position = vec2(-30, 0);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.position = vec2(20, 0);
+      engine.rightEntity.velocity = vec2(0, 0);
+
+      // Enemy collects b = 2 node
+      engine.orbs.push({
+        id: 'test_orb_b2',
+        type: 'FREQUENCY_X2',
+        position: engine.rightEntity.position.clone(),
+        radius: 4,
+      });
+      engine.update(1 / 60);
+      expect(engine.rightEntity.frequency).toBe(2);
+      expect(engine.rightEntity.symbol).toBe('cos 2x');
+
+      // 1st collision with d/dx after collecting b = 2: d/dx(cos 2x) = -2sin 2x
+      engine.leftEntity.position = engine.rightEntity.position.clone();
+      engine.update(1 / 60);
+      expect(engine.rightEntity.symbol).toBe('-2sin 2x');
+      expect(engine.rightEntity.hp).toBe(100);
+      expect(engine.leftEntity.hp).toBe(100);
+
+      // 2nd collision with d/dx after collecting b = 2: d/dx(-2sin 2x) = -4cos 2x
+      engine.leftEntity.position = engine.rightEntity.position.clone();
+      engine.update(1 / 60);
+      expect(engine.rightEntity.symbol).toBe('-4cos 2x');
+      expect(engine.rightEntity.hp).toBe(100);
+      expect(engine.leftEntity.hp).toBe(100);
+    });
+
+    it('Test 3: Cooldown Reduction from 2pi to pi', () => {
+      const level5 = LevelRegistry.getLevel(5)!;
+      const engine = new SimulationEngine(level5);
+
+      engine.update(3.1); // Enter combat
+
+      // Keep them apart so they do not collide physically
+      engine.leftEntity.position = vec2(-40, -40);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.position = vec2(40, 40);
+      engine.rightEntity.velocity = vec2(0, 0);
+
+      expect(engine.rightEntity.cooldownMax).toBeCloseTo(6.28, 2);
+      expect(engine.rightEntity.cooldownRemaining).toBeCloseTo(6.28, 2);
+
+      // Advance by 6.0 seconds - cooldown not yet reached
+      engine.update(6.0);
+      expect(engine.activeLasers.length).toBe(0);
+
+      // Advance 0.3s (total 6.3s > 6.28s) -> 1st shot fires!
+      engine.update(0.3);
+      expect(engine.activeLasers.length).toBe(1);
+      const firstLaser = engine.activeLasers[0];
+      expect(firstLaser.ownerId).toBe(engine.rightEntity.id);
+      expect(firstLaser.damage).toBe(25);
+
+      // Cooldown reset to 6.28s
+      expect(engine.rightEntity.cooldownMax).toBeCloseTo(6.28, 2);
+
+      // Clear lasers
+      engine.activeLasers = [];
+
+      // Advance 2.0s into the second cycle
+      engine.update(2.0);
+
+      // Enemy collects b = 2
+      engine.orbs.push({
+        id: 'test_orb_b2_cooldown',
+        type: 'FREQUENCY_X2',
+        position: engine.rightEntity.position.clone(),
+        radius: 4,
+      });
+      engine.update(1 / 60);
+      expect(engine.rightEntity.frequency).toBe(2);
+
+      // The current cooldown cycle in progress is NOT cut short
+      expect(engine.rightEntity.cooldownRemaining).toBeGreaterThan(3.0);
+
+      // Complete the remaining time of the 2nd cycle (~4.28s)
+      engine.update(4.3);
+      expect(engine.activeLasers.length).toBe(1);
+
+      // Now upon completing the cycle, cooldownMax is updated to pi = 3.14s
+      expect(engine.rightEntity.cooldownMax).toBeCloseTo(3.14, 2);
+      expect(engine.rightEntity.cooldownRemaining).toBeCloseTo(3.14, 2);
+
+      // Clear lasers
+      engine.activeLasers = [];
+
+      // Advance 3.0s: no new shot yet (3.0s < 3.14s)
+      engine.update(3.0);
+      expect(engine.activeLasers.length).toBe(0);
+
+      // Advance 0.2s (total 3.2s > 3.14s): new shot fires exactly after 3.14s!
+      engine.update(0.2);
+      expect(engine.activeLasers.length).toBe(1);
+      expect(engine.rightEntity.cooldownMax).toBeCloseTo(3.14, 2);
+    });
+
+    it('Test 4: Exclusivity of Power-Up Collection (Intangible to Player)', () => {
+      const level5 = LevelRegistry.getLevel(5)!;
+      const engine = new SimulationEngine(level5);
+
+      engine.update(3.1); // Enter combat
+
+      // Keep enemy far away
+      engine.rightEntity.position = vec2(40, 40);
+      engine.rightEntity.velocity = vec2(0, 0);
+
+      const orbB2 = {
+        id: 'orb_b2_test',
+        type: 'FREQUENCY_X2' as const,
+        position: vec2(-28, -14),
+        radius: 4,
+      };
+      const orbA2 = {
+        id: 'orb_a2_test',
+        type: 'AMPLITUDE_X2' as const,
+        position: vec2(18, 11),
+        radius: 4,
+      };
+      engine.orbs = [orbB2, orbA2];
+
+      // Player passes directly over orb_b2
+      engine.leftEntity.position = vec2(-28, -14);
+      engine.leftEntity.velocity = vec2(10, 0);
+      engine.update(1 / 60);
+
+      // Nodos amarillos no deben desaparecer, ni alterar su posición
+      expect(engine.orbs.length).toBe(2);
+      expect(engine.orbs[0].position.x).toBe(-28);
+      expect(engine.orbs[0].position.y).toBe(-14);
+
+      // Ni aplicar ningún efecto al Jugador o al Enemigo
+      expect(engine.leftEntity.frequency).toBe(1);
+      expect(engine.rightEntity.frequency).toBe(1);
+      expect(engine.leftEntity.hp).toBe(100);
+
+      // Player passes directly over orb_a2
+      engine.leftEntity.position = vec2(18, 11);
+      engine.leftEntity.velocity = vec2(10, 0);
+      engine.update(1 / 60);
+
+      expect(engine.orbs.length).toBe(2);
+      expect(engine.orbs[1].position.x).toBe(18);
+      expect(engine.orbs[1].position.y).toBe(11);
+      expect(engine.leftEntity.amplitude).toBe(1);
+      expect(engine.rightEntity.amplitude).toBe(1);
+
+      // Verify timed spawning at 8.0s and 14.0s
+      const freshEngine = new SimulationEngine(level5);
+      freshEngine.update(3.1); // enter combat
+      expect(freshEngine.orbs.length).toBe(0);
+
+      // At 8.0s combat time, b = 2 spawns
+      freshEngine.update(8.0);
+      expect(freshEngine.orbs.some((o) => o.id === 'orb_b2')).toBe(true);
+
+      // At 14.0s combat time, a = 2 spawns
+      freshEngine.update(6.0);
+      expect(freshEngine.orbs.some((o) => o.id === 'orb_a2')).toBe(true);
+    });
+
+    it('Test 5: Wave projectile deals -25 HP on hit and 0 on dodge', () => {
+      const level5 = LevelRegistry.getLevel(5)!;
+      const engine = new SimulationEngine(level5);
+
+      engine.update(3.1); // Combat
+
+      // Position enemy at (25, 0) and player at (-10, -10) directly on the sine wave:
+      // at x = -10: y = 0 + 12 * sin(-10 * 0.2) ≈ -10.9, distance to (-10, -10) is ~0.9 <= 6.5
+      engine.rightEntity.position = vec2(25, 0);
+      engine.rightEntity.velocity = vec2(0, 0);
+      engine.leftEntity.position = vec2(-10, -10);
+      engine.leftEntity.velocity = vec2(0, 0);
+
+      // Add a wave laser from enemy
+      engine.activeLasers = [
+        {
+          id: 'test_wave',
+          ownerId: engine.rightEntity.id,
+          sourcePos: vec2(0, 0),
+          curveType: 'SINE',
+          isTelegraph: false,
+          telegraphTime: 0,
+          durationRemaining: 0.8,
+          damage: 25,
+        },
+      ];
+
+      engine.update(1 / 60);
+
+      // Hits player for -25 HP
+      expect(engine.leftEntity.hp).toBe(75);
+
+      // Clear lasers and position player safely out of range (dodge)
+      engine.activeLasers = [];
+      engine.leftEntity.position = vec2(-40, -40); // Far away from wave
+
+      engine.activeLasers = [
+        {
+          id: 'test_wave_miss',
+          ownerId: engine.rightEntity.id,
+          sourcePos: vec2(0, 0),
+          curveType: 'SINE',
+          isTelegraph: false,
+          telegraphTime: 0,
+          durationRemaining: 0.8,
+          damage: 25,
+        },
+      ];
+
+      engine.update(1 / 60);
+
+      // Player took 0 damage on dodge
+      expect(engine.leftEntity.hp).toBe(75);
     });
   });
 });

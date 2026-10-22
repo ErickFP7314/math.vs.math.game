@@ -54,6 +54,7 @@ export class BaseEntity implements PhysicalCircle {
   // Additional entity-specific dynamic properties
   tag = '';
   currentPhaseIndex = 0; // for 'i'
+  trigPhase = 0;         // for trig (0: sin, 1: cos, 2: -sin, 3: -cos)
   amplitude = 1;         // for trig
   frequency = 1;         // for trig
   sectorAngle = Math.PI / 6; // for pi

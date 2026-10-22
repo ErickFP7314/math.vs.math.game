@@ -215,4 +215,33 @@ export class Curves {
     }
     return false;
   }
+
+  /**
+   * Check if a circle intersects a cosine wave y - y0 = 12 * cos((x - x0) * 0.2)
+   */
+  static intersectsCosine(
+    circleCenter: Vector2D,
+    radius: number,
+    origin: Vector2D,
+    minX = -50,
+    maxX = 50,
+    samples = 24
+  ): boolean {
+    const xStart = Math.max(minX, circleCenter.x - radius);
+    const xEnd = Math.min(maxX, circleCenter.x + radius);
+    if (xStart > xEnd) return false;
+
+    const step = (xEnd - xStart) / samples;
+    const rSq = radius * radius;
+
+    for (let i = 0; i <= samples; i++) {
+      const x = xStart + i * step;
+      const y = origin.y + Math.cos((x - origin.x) * 0.2) * 12;
+      const distSq = (x - circleCenter.x) ** 2 + (y - circleCenter.y) ** 2;
+      if (distSq <= rSq) {
+        return true;
+      }
+    }
+    return false;
+  }
 }

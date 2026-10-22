@@ -48,6 +48,9 @@ export class SimulationEngine {
   piCurrentDigitIndex = 0;
   imaginaryPhaseTimer = 0;
   level3ContactCooldown = 0;
+  level5MatchTime = 0;
+  level5SpawnedB2 = false;
+  level5SpawnedA2 = false;
 
   eventBus: EventBus;
   laserIdCounter = 0;
@@ -96,6 +99,19 @@ export class SimulationEngine {
       this.rightEntity.cooldownRemaining = 1.0;
       this.rightEntity.cooldownMax = 3.0;
     }
+
+    if (level.id === 5) {
+      // Level 5: Player d/dx has no cooldown, Enemy sin x starts with 6.28s cooldown (T = 2π/b)
+      this.leftEntity.cooldownRemaining = 0;
+      this.leftEntity.cooldownMax = 0;
+      this.rightEntity.cooldownRemaining = 6.28;
+      this.rightEntity.cooldownMax = 6.28;
+      this.rightEntity.frequency = 1;
+      this.rightEntity.amplitude = 1;
+      this.rightEntity.trigPhase = 0;
+      this.rightEntity.symbol = 'sin x';
+      this.rightEntity.name = 'sin x';
+    }
   }
 
   update(dt: number): void {
@@ -127,6 +143,22 @@ export class SimulationEngine {
           this.leftEntity.cooldownMax = 0;
           this.rightEntity.cooldownRemaining = 1.0;
           this.rightEntity.cooldownMax = 3.0;
+        }
+        if (this.level.id === 5) {
+          // Level 5: Player d/dx has no cooldown, Enemy sin x starts with 6.28s cooldown
+          this.leftEntity.cooldownRemaining = 0;
+          this.leftEntity.cooldownMax = 0;
+          this.rightEntity.cooldownRemaining = 6.28;
+          this.rightEntity.cooldownMax = 6.28;
+          this.rightEntity.frequency = 1;
+          this.rightEntity.amplitude = 1;
+          this.rightEntity.trigPhase = 0;
+          this.rightEntity.symbol = 'sin x';
+          this.rightEntity.name = 'sin x';
+          this.derivativeHitCount = 0;
+          this.level5MatchTime = 0;
+          this.level5SpawnedB2 = false;
+          this.level5SpawnedA2 = false;
         }
         this.eventBus.emit('MATCH_START', { levelId: this.level.id });
       }
@@ -229,6 +261,29 @@ export class SimulationEngine {
             damage: 4,
           });
           this.eventBus.emit('SKILL_ACTIVATED', { entityId: this.rightEntity.id, skillName: 'Exponential Blade!' });
+        }
+      }
+
+      // Level 5 enemy wave attack cycle (based strictly on period T = 2π/b)
+      if (this.level.id === 5) {
+        if (this.rightEntity.isReady() && !this.rightEntity.isDead) {
+          const newCooldownMax = this.rightEntity.frequency >= 2 ? 3.14 : 6.28;
+          this.rightEntity.cooldownMax = newCooldownMax;
+          this.rightEntity.resetCooldown();
+          this.laserIdCounter++;
+          const isCos = this.rightEntity.symbol.includes('cos');
+          const skillName = isCos ? '¡Onda Coseno!' : '¡Onda Seno!';
+          this.addLaser({
+            id: `laser_${this.laserIdCounter}_enemy_wave`,
+            ownerId: this.rightEntity.id,
+            sourcePos: this.rightEntity.position.clone(),
+            curveType: isCos ? 'COSINE' : 'SINE',
+            isTelegraph: false,
+            telegraphTime: 0,
+            durationRemaining: 0.8,
+            damage: 25,
+          });
+          this.eventBus.emit('SKILL_ACTIVATED', { entityId: this.rightEntity.id, skillName });
         }
       }
 
@@ -393,49 +448,50 @@ export class SimulationEngine {
       }
     }
 
-    // Level 5: d/dx vs sin(x) — derivative transformation cycle (sin→cos→-sin→-cos→sin)
-    // Player (d/dx) receives zero contact damage; contact transforms enemy's trig function
+    // Level 5: d/dx vs sin(x) — cyclic immortality & chain rule scaling
+    // 0 HP damage to both entities. Contact transforms enemy's trig function.
     if (this.level.id === 5 && player.symbol === 'd/dx') {
-      const trigSymbols = ['sin x', 'cos x', '-sin x', '-cos x'];
-      if (trigSymbols.includes(enemy.symbol)) {
-        this.derivativeHitCount++;
-        let nextSymbol = 'cos x';
-        let resultLatex = '\\cos x';
-        if (enemy.symbol === 'sin x') {
-          nextSymbol = 'cos x';
-          resultLatex = '\\cos x';
-        } else if (enemy.symbol === 'cos x') {
-          nextSymbol = '-sin x';
-          resultLatex = '-\\sin x';
-        } else if (enemy.symbol === '-sin x') {
-          nextSymbol = '-cos x';
-          resultLatex = '-\\cos x';
-        } else if (enemy.symbol === '-cos x') {
-          nextSymbol = 'sin x';
-          resultLatex = '\\sin x';
-        }
-        enemy.symbol = nextSymbol;
-        enemy.name = nextSymbol;
-        // Update color to reflect transformation
-        if (nextSymbol === 'cos x') { enemy.color = '#9C27B0'; }
-        else if (nextSymbol === '-sin x') { enemy.color = '#E91E63'; }
-        else if (nextSymbol === '-cos x') { enemy.color = '#FF5722'; }
-        else { enemy.color = '#7B1FA2'; }
-        const damage = 14 * Math.max(1, enemy.amplitude * 0.5);
-        enemy.takeDamage(damage);
-        this.eventBus.emit('DAMAGE_DEALT', {
-          targetId: enemy.id,
-          amount: damage,
-          color: '#00ACC1',
-          position: { x: enemy.position.x, y: enemy.position.y },
-        });
-        this.eventBus.emit('MATH_FORMULA', {
-          latex: resultLatex,
-          position: { x: collisionPos.x, y: collisionPos.y },
-          color: '#00ACC1',
-        });
-        return;
+      this.derivativeHitCount++;
+      const currentPhase = enemy.trigPhase !== undefined ? enemy.trigPhase : (
+        enemy.symbol.includes('-cos') ? 3 :
+        enemy.symbol.includes('-sin') ? 2 :
+        enemy.symbol.includes('cos') ? 1 : 0
+      );
+      const nextPhase = (currentPhase + 1) % 4;
+      enemy.trigPhase = nextPhase;
+
+      const b = enemy.frequency || 1;
+      if (b > 1) {
+        enemy.amplitude = (enemy.amplitude || 1) * b;
       }
+      const A = enemy.amplitude || 1;
+
+      const currentExpr = enemy.symbol;
+
+      const newAmpStr = A > 1 ? `${A}` : '';
+      const newSignStr = (nextPhase === 2 || nextPhase === 3) ? '-' : '';
+      const newTrigStr = (nextPhase === 0 || nextPhase === 2) ? 'sin' : 'cos';
+      const argStr = b > 1 ? `${b}x` : 'x';
+      const nextExpr = `${newSignStr}${newAmpStr}${newTrigStr} ${argStr}`.trim();
+
+      enemy.symbol = nextExpr;
+      enemy.name = nextExpr;
+
+      // Update color to reflect transformation
+      if (nextPhase === 1) enemy.color = '#9C27B0';
+      else if (nextPhase === 2) enemy.color = '#E91E63';
+      else if (nextPhase === 3) enemy.color = '#FF5722';
+      else enemy.color = '#7B1FA2';
+
+      const formatLatex = (str: string) => str.replace(/sin/g, '\\sin ').replace(/cos/g, '\\cos ');
+      const formulaLatex = `\\frac{d}{dx}(${formatLatex(currentExpr)}) = ${formatLatex(nextExpr)}`;
+
+      this.eventBus.emit('MATH_FORMULA', {
+        latex: formulaLatex,
+        position: { x: collisionPos.x, y: collisionPos.y },
+        color: '#00ACC1',
+      });
+      return; // 0 damage to both player and enemy!
     }
 
     // Level 2: d/dx vs e^x (Eigenfunction Immunity + Reflected Burn)
@@ -864,8 +920,10 @@ export class SimulationEngine {
             hit = Curves.intersectsDiagonalLine(target.position, target.radius, laser.sourcePos, -50, 50);
           } else if (laser.curveType === 'HORIZONTAL') {
             hit = Curves.intersectsHorizontalLine(target.position, target.radius, laser.sourcePos.y, -50, 50);
-          } else if (laser.curveType === 'SINE' || laser.curveType === 'COSINE') {
+          } else if (laser.curveType === 'SINE') {
             hit = Curves.intersectsSine(target.position, target.radius, laser.sourcePos, -50, 50);
+          } else if (laser.curveType === 'COSINE') {
+            hit = Curves.intersectsCosine(target.position, target.radius, laser.sourcePos, -50, 50);
           }
 
           if (hit) {
@@ -1012,24 +1070,47 @@ export class SimulationEngine {
   }
 
   private updateOrbs(dt: number): void {
-    this.orbSpawnTimer -= dt;
-    if (this.orbSpawnTimer <= 0) {
-      this.orbSpawnTimer = 6.0;
-      if (this.orbs.length < 3) {
-        const type = Math.random() > 0.5 ? 'AMPLITUDE_X2' : 'FREQUENCY_X2';
+    if (this.level.id === 5) {
+      this.level5MatchTime += dt;
+      if (this.level5MatchTime >= 8.0 && !this.level5SpawnedB2) {
+        this.level5SpawnedB2 = true;
         this.orbs.push({
-          id: `orb_${Date.now()}`,
-          type,
-          position: vec2((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 100),
+          id: 'orb_b2',
+          type: 'FREQUENCY_X2',
+          position: vec2(-28, -14),
           radius: 4,
         });
       }
+      if (this.level5MatchTime >= 14.0 && !this.level5SpawnedA2) {
+        this.level5SpawnedA2 = true;
+        this.orbs.push({
+          id: 'orb_a2',
+          type: 'AMPLITUDE_X2',
+          position: vec2(18, 11),
+          radius: 4,
+        });
+      }
+    } else {
+      this.orbSpawnTimer -= dt;
+      if (this.orbSpawnTimer <= 0) {
+        this.orbSpawnTimer = 6.0;
+        if (this.orbs.length < 3) {
+          const type = Math.random() > 0.5 ? 'AMPLITUDE_X2' : 'FREQUENCY_X2';
+          this.orbs.push({
+            id: `orb_${Date.now()}`,
+            type,
+            position: vec2((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 100),
+            radius: 4,
+          });
+        }
+      }
     }
 
-    // Check entity collection of orbs
+    // Check entity collection of orbs - in Level 5, orbs are intangible to player (d/dx)
+    const collectors = this.level.id === 5 ? [this.rightEntity] : [this.leftEntity, this.rightEntity];
     for (let o = this.orbs.length - 1; o >= 0; o--) {
       const orb = this.orbs[o];
-      for (const entity of [this.leftEntity, this.rightEntity]) {
+      for (const entity of collectors) {
         if (entity.position.distanceTo(orb.position) <= entity.radius + orb.radius) {
           if (orb.type === 'AMPLITUDE_X2') {
             entity.amplitude = Math.min(16, entity.amplitude * 2);
@@ -1039,13 +1120,26 @@ export class SimulationEngine {
               color: '#FFD54F',
             });
           } else {
-            entity.frequency = Math.min(16, entity.frequency * 2);
-            entity.cooldownMax = Math.max(0.39, (2 * Math.PI) / entity.frequency);
-            this.eventBus.emit('MATH_FORMULA', {
-              latex: `b \\times 2 = ${entity.frequency} \\text{ [Freq x2]}`,
-              position: { x: entity.position.x, y: entity.position.y },
-              color: '#FFD54F',
-            });
+            entity.frequency = 2;
+            if (this.level.id === 5) {
+              if (!entity.symbol.includes('2x')) {
+                entity.symbol = entity.symbol.replace('x', '2x');
+                entity.name = entity.symbol;
+              }
+              this.eventBus.emit('MATH_FORMULA', {
+                latex: `\\text{¡Mejora de período! } y = ${entity.symbol}`,
+                position: { x: entity.position.x, y: entity.position.y },
+                color: '#FFD54F',
+              });
+            } else {
+              entity.frequency = Math.min(16, entity.frequency * 2);
+              entity.cooldownMax = Math.max(0.39, (2 * Math.PI) / entity.frequency);
+              this.eventBus.emit('MATH_FORMULA', {
+                latex: `b \\times 2 = ${entity.frequency} \\text{ [Freq x2]}`,
+                position: { x: entity.position.x, y: entity.position.y },
+                color: '#FFD54F',
+              });
+            }
           }
           this.eventBus.emit('ORB_COLLECTED', { entityId: entity.id, orbType: orb.type });
           this.orbs.splice(o, 1);
@@ -1057,7 +1151,7 @@ export class SimulationEngine {
 
   private addLaser(laser: ActiveLaser): void {
     this.activeLasers.push(laser);
-    if (this.level.id !== 3 && this.level.id !== 4) {
+    if (this.level.id !== 3 && this.level.id !== 4 && this.level.id !== 5) {
       this.frozenOwnerIds.add(laser.ownerId);
     }
     if (!laser.isTelegraph) {
@@ -1079,8 +1173,8 @@ export class SimulationEngine {
   }
 
   private triggerEnemyAttack(): void {
-    if (this.level.id === 3 || this.level.id === 4) {
-      // In Level 3 & 4, custom mechanics handle enemy attacks
+    if (this.level.id === 3 || this.level.id === 4 || this.level.id === 5) {
+      // In Level 3, 4 & 5, custom mechanics handle enemy attacks
       return;
     }
 
@@ -1115,8 +1209,8 @@ export class SimulationEngine {
    * Player or AI manual trigger for special skills
    */
   triggerSkill(team: 'LEFT' | 'RIGHT'): boolean {
-    if (this.level.id === 4 && team === 'LEFT') {
-      return false; // Player has no ranged attacks or skills in Level 4
+    if ((this.level.id === 4 || this.level.id === 5) && team === 'LEFT') {
+      return false; // Player has no ranged attacks or skills in Level 4 and Level 5
     }
     const entity = team === 'LEFT' ? this.leftEntity : this.rightEntity;
     if (entity.isDead || !entity.isReady()) return false;
@@ -1237,9 +1331,9 @@ export class SimulationEngine {
     }
 
     // 6. Sine / Cosine Wave
-    if (entity.symbol === 'sin x' || entity.symbol === 'cos x' || entity.symbol === '-sin x' || entity.symbol === '-cos x') {
+    if (entity.symbol.includes('sin') || entity.symbol.includes('cos')) {
       const isCos = entity.symbol.includes('cos');
-      const skillName = isCos ? 'Cosine Wave!' : 'Sine Wave!';
+      const skillName = isCos ? '¡Onda Coseno!' : '¡Onda Seno!';
       this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName });
       this.addLaser({
         id: `laser_${this.laserIdCounter}`,
@@ -1248,7 +1342,7 @@ export class SimulationEngine {
         curveType: isCos ? 'COSINE' : 'SINE',
         isTelegraph: false,
         telegraphTime: 0,
-        durationRemaining: 0.7,
+        durationRemaining: 0.8,
         damage: 25,
       });
       return true;
@@ -1386,7 +1480,7 @@ export class SimulationEngine {
   private recalcFrozenOwners(): void {
     this.frozenOwnerIds.clear();
     for (const laser of this.activeLasers) {
-      if (this.level.id !== 3 && this.level.id !== 4) {
+      if (this.level.id !== 3 && this.level.id !== 4 && this.level.id !== 5) {
         this.frozenOwnerIds.add(laser.ownerId);
       }
     }

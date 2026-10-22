@@ -82,4 +82,15 @@ describe('Curves Math & Collision', () => {
     expect(Curves.intersectsCubic(vec2(0, 1), 3, origin)).toBe(true);
     expect(Curves.intersectsCubic(vec2(0, 20), 3, origin)).toBe(false);
   });
+
+  it('detects circle intersection with sine and cosine waves', () => {
+    const origin = vec2(0, 0);
+    // Sine wave passes through origin (0, 0)
+    expect(Curves.intersectsSine(vec2(0, 0), 2, origin)).toBe(true);
+    expect(Curves.intersectsSine(vec2(0, 30), 2, origin)).toBe(false);
+
+    // Cosine wave has peak at x = 0, y = 12
+    expect(Curves.intersectsCosine(vec2(0, 12), 2, origin)).toBe(true);
+    expect(Curves.intersectsCosine(vec2(0, -30), 2, origin)).toBe(false);
+  });
 });

@@ -287,60 +287,60 @@ export const MathInfoScreen: React.FC<MathInfoScreenProps> = ({
           : 'As ∂/∂y, you must chase and physically collide with eˣ to land your instant One-Shot KO, while evading the telegraphed Exponential Blade that inflicts up to 14 total damage.',
       },
       5: {
-        mainFormula: '\\frac{d}{dx}\\sin(x) = \\cos(x),\\quad \\frac{d}{dx}\\cos(x) = -\\sin(x)',
+        mainFormula: '\\sin x \\xrightarrow{d/dx} \\cos x \\xrightarrow{d/dx} -\\sin x \\xrightarrow{d/dx} -\\cos x \\xrightarrow{d/dx} \\sin x',
         theoremName: isEs
-          ? 'Ciclo Diferencial de Funciones Trigonométricas'
+          ? 'Inmortalidad Cíclica, Período Ondulatorio y Regla de la Cadena'
           : isKo
-          ? '삼각함수 미분 순환 주기'
-          : 'Cyclic Differentiation of Trigonometric Functions',
+          ? '삼각함수의 순환 불멸성, 파동 주기 및 연쇄 법칙'
+          : 'Cyclic Immortality, Wave Period & Chain Rule',
         explanation: isEs
-          ? 'Las derivadas sucesivas de las funciones trigonométricas forman un ciclo cuaternario cerrado de periodo 4: sin(x) → cos(x) → -sin(x) → -cos(x) → sin(x).'
+          ? 'A diferencia de los polinomios que se extinguen al derivarse, las funciones trigonométricas entran en un ciclo infinito de 4 estados. Por ello, el jugador (d/dx) nunca daña a sin x cuerpo a cuerpo (0 daño a ambas bolas). Además, el período T = 2π/b gobierna el cooldown de disparo del enemigo, y con el ítem b = 2 se activa el factor multiplicativo de la Regla de la Cadena.'
           : isKo
-          ? '삼각함수의 순환 미분은 주기 4의 닫힌 순환을 이룹니다: sin(x) → cos(x) → -sin(x) → -cos(x) → sin(x).'
-          : 'Successive derivatives of trigonometric functions form a closed 4-periodic cycle: sin(x) → cos(x) → -sin(x) → -cos(x) → sin(x).',
+          ? '미분할수록 차수가 줄어 0이 되는 다항식과 달리, 삼각함수는 4개 상태의 무한 순환 주기에 진입합니다. 따라서 플레이어(d/dx)는 직접 충돌로 sin x에 피해를 줄 수 없습니다(양측 0 피해). 파동 주기 T = 2π/b가 적의 발사 쿨다운을 결정하며, b = 2 획득 시 연쇄 법칙에 따라 진폭이 증폭됩니다.'
+          : 'Unlike polynomials which reduce to 0 under repeated differentiation, trigonometric functions loop infinitely through a 4-step cycle. Thus, the player (d/dx) never inflicts melee damage to sin x (0 damage to both). The wave period T = 2π/b dictates the enemy firing cooldown, and item b = 2 activates Chain Rule scaling.',
         breakdownList: [
           {
-            title: isEs ? '1ª Derivada' : isKo ? '1차 미분' : '1st Derivative',
-            math: '\\frac{d}{dx}\\sin(x) = \\cos(x)',
+            title: isEs ? 'Inmortalidad Cíclica (0 Daño de Contacto)' : isKo ? '순환 불멸성 (0 접촉 피해)' : 'Cyclic Immortality (0 Contact Damage)',
+            math: '\\frac{d}{dx}(\\sin x) = \\cos x \\implies \\Delta HP = 0',
             desc: isEs
-              ? 'sin(x) se transforma en cos(x).'
+              ? 'Chocar cuerpo a cuerpo no resta vida a ninguna esfera. Solo transmuta la función enemiga a su siguiente derivada y suma +1 al contador de intentos fallidos del jugador.'
               : isKo
-              ? 'sin(x)가 cos(x)로 변환됩니다.'
-              : 'sin(x) transforms into cos(x).',
+              ? '직접 충돌해도 양쪽 구체의 체력은 깎이지 않습니다. 적의 함수를 다음 도함수로 변환하고 플레이어의 미분 시도 횟수를 +1 증가시킵니다.'
+              : 'Physical collision deals 0 damage to both spheres. It merely transforms the enemy function into its next derivative and increments the failed attempt counter by +1.',
           },
           {
-            title: isEs ? '2ª Derivada' : isKo ? '2차 미분' : '2nd Derivative',
-            math: '\\frac{d}{dx}\\cos(x) = -\\sin(x)',
+            title: isEs ? 'Período T = 2π/b como Cooldown' : isKo ? '파동 주기 T = 2π/b 와 쿨다운' : 'Wave Period T = 2π/b as Cooldown',
+            math: 'T_1 = 2\\pi \\approx 6.28\\text{s} \\xrightarrow{b=2} T_2 = \\pi \\approx 3.14\\text{s}',
             desc: isEs
-              ? 'cos(x) se transforma en -sin(x).'
+              ? 'El tiempo de recarga de disparo del enemigo es su período matemático (inicia en 6.28s). Si recoge b = 2, al terminar el ciclo en curso su cooldown se reduce a la mitad (3.14s).'
               : isKo
-              ? 'cos(x)가 -sin(x)로 변환됩니다.'
-              : 'cos(x) transforms into -sin(x).',
+              ? '적의 발사 쿨다운은 수학적 주기입니다(초기 6.28초). b = 2 획득 시 현재 진행 중인 주기가 끝난 후 쿨다운이 절반(3.14초)으로 감소합니다.'
+              : 'The enemy attack cooldown is its exact mathematical period (starts at 6.28s). Collecting b = 2 halves the cooldown to 3.14s upon completing the current cycle.',
           },
           {
-            title: isEs ? '3ª Derivada' : isKo ? '3차 미분' : '3rd Derivative',
-            math: '\\frac{d}{dx}(-\\sin(x)) = -\\cos(x)',
+            title: isEs ? 'Regla de la Cadena (b = 2)' : isKo ? '연쇄 법칙 (b = 2)' : 'Chain Rule (b = 2)',
+            math: '\\frac{d}{dx}[f(2x)] = 2 \\cdot f\'(2x) \\implies \\cos 2x \\to -2\\sin 2x \\to -4\\cos 2x',
             desc: isEs
-              ? '-sin(x) se transforma en -cos(x).'
+              ? 'Tras recoger b = 2, cada impacto de d/dx extrae un factor ×2 hacia la amplitud exterior en cada derivada sucesiva.'
               : isKo
-              ? '-sin(x)가 -cos(x)로 변환됩니다.'
-              : '-sin(x) transforms into -cos(x).',
+              ? 'b = 2 획득 후, d/dx가 충돌할 때마다 연쇄 법칙에 의해 도함수 앞의 진폭에 ×2 계수가 곱해집니다.'
+              : 'After picking up b = 2, each collision with d/dx pulls an extra ×2 factor outside into the amplitude on each successive derivative.',
           },
           {
-            title: isEs ? '4ª Derivada (Cierre de Ciclo)' : isKo ? '4차 미분 (주기 완성)' : '4th Derivative (Cycle Reset)',
-            math: '\\frac{d}{dx}(-\\cos(x)) = \\sin(x)',
+            title: isEs ? 'Disparo Ondulatorio y Power-Ups Exclusivos' : isKo ? '파동 발사와 전용 아이템' : 'Wave Projectile & Exclusive Power-Ups',
+            math: '\\text{Proyectil } = -25\\text{ HP}, \\quad \\text{Nodos } b=2, a=2 \\text{ (Intangibles a } d/dx)',
             desc: isEs
-              ? '-cos(x) retorna a sin(x), completando el periodo 4.'
+              ? 'Al completarse el período, el enemigo lanza un proyectil de onda (¡Onda Seno! / ¡Onda Coseno!) que resta -25 HP al jugador si impacta. Los nodos amarillos son intangibles para d/dx: solo el enemigo puede recogerlos.'
               : isKo
-              ? '-cos(x)가 sin(x)로 돌아와 주기 4가 완성됩니다.'
-              : '-cos(x) returns to sin(x), closing the 4-step cycle.',
+              ? '주기가 완료되면 적은 플레이어에게 직격 시 -25 HP 피해를 입히는 파동(사인파! / 코사인파!)을 발사합니다. 노란색 아이템은 d/dx가 통과(비활성)하며 오직 적만 획득 가능합니다.'
+              : 'Upon period completion, the enemy fires a wave projectile (Sine Wave! / Cosine Wave!) dealing -25 HP to the player on hit. Yellow nodes are intangible to d/dx; only the enemy can collect them.',
           },
         ],
         mechanicSummary: isEs
-          ? 'El operador d/dx no recibe daño de contacto al golpear a sin(x). Cada impacto muta la función enemiga por el ciclo trigonométrico e inflige 14 de daño. La enemiga contrataca con ondas sinusoidales.'
+          ? 'Como d/dx, no puedes derrotar a sin x cuerpo a cuerpo debido a su ciclo infinito. Debes esquivar sus ondas periódicas (-25 HP) y vigilar los power-ups estáticos en la arena.'
           : isKo
-          ? 'd/dx 연산자는 sin(x)와 직접 충돌해도 피해를 입지 않습니다. 타격할 때마다 적 함수가 순환 주기에 따라 변환되며 14 데미지를 입힙니다. 적은 파동 레이저로 공격합니다.'
-          : 'd/dx takes zero contact damage from sin(x). Each collision transforms the enemy function along the trig cycle and deals 14 damage. The enemy fires wave lasers.',
+          ? 'd/dx로서 플레이어는 무한 순환으로 인해 sin x를 직접 타격으로 쓰러뜨릴 수 없습니다. 주기적으로 날아오는 파동(-25 HP)을 피하며 경기장 아이템의 영향을 관찰해야 합니다.'
+          : 'As d/dx, you cannot defeat sin x through melee contact due to its infinite cycle. You must evade its periodic waves (-25 HP) while watching the arena power-up nodes.',
       },
       6: {
         mainFormula: '\\int e^x dx = e^x + C',
