@@ -47,6 +47,7 @@ export class SimulationEngine {
   piDigits = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9];
   piCurrentDigitIndex = 0;
   imaginaryPhaseTimer = 0;
+  level3ContactCooldown = 0;
 
   eventBus: EventBus;
   laserIdCounter = 0;
@@ -79,6 +80,14 @@ export class SimulationEngine {
         this.rightEntity.isImmuneToDerivative = true;
       }
     }
+
+    if (level.id === 3) {
+      // Level 3: Initial setup (e^x starts with 1s cooldown, i starts in Phase 0: [i])
+      this.leftEntity.cooldownRemaining = 1.0;
+      this.rightEntity.currentPhaseIndex = 0;
+      this.rightEntity.symbol = 'i';
+      this.rightEntity.name = 'i';
+    }
   }
 
   update(dt: number): void {
@@ -95,6 +104,15 @@ export class SimulationEngine {
       if (this.countdownRemaining <= 0) {
         this.status = 'COMBAT';
         this.randomizeEntityDirections();
+        if (this.level.id === 3) {
+          // Rule 2: "al iniciar la partida tras la cuenta regresiva, el primer cooldown es de 1 segundo"
+          this.leftEntity.cooldownRemaining = 1.0;
+          this.rightEntity.currentPhaseIndex = 0;
+          this.rightEntity.symbol = 'i';
+          this.rightEntity.name = 'i';
+          this.imaginaryPhaseTimer = 0;
+          this.level3ContactCooldown = 0;
+        }
         this.eventBus.emit('MATCH_START', { levelId: this.level.id });
       }
       return;
@@ -158,6 +176,28 @@ export class SimulationEngine {
 
     // 6. AI decision loop for the opponent - only while match is actively in COMBAT
     if (this.status === 'COMBAT') {
+      // Level 3 player Exponential Blade cycle and contact cooldown
+      if (this.level.id === 3) {
+        if (this.level3ContactCooldown > 0) {
+          this.level3ContactCooldown -= dt;
+        }
+        if (this.leftEntity.isReady() && !this.leftEntity.isDead) {
+          this.leftEntity.resetCooldown();
+          this.laserIdCounter++;
+          this.addLaser({
+            id: `laser_${this.laserIdCounter}_exp_blade`,
+            ownerId: this.leftEntity.id,
+            sourcePos: this.leftEntity.position.clone(),
+            curveType: 'EXPONENTIAL',
+            isTelegraph: true,
+            telegraphTime: 1.0,
+            durationRemaining: 0.6,
+            damage: 21,
+          });
+          this.eventBus.emit('SKILL_ACTIVATED', { entityId: this.leftEntity.id, skillName: 'Exponential Blade!' });
+        }
+      }
+
       this.updateAI(dt);
     }
 
@@ -176,13 +216,31 @@ export class SimulationEngine {
         if (effect.tickTimer >= interval) {
           effect.tickTimer -= interval;
           const dmg = effect.tickDamage || 2;
-          entity.takeDamage(dmg);
-          this.eventBus.emit('DAMAGE_DEALT', {
-            targetId: entity.id,
-            amount: dmg,
-            color: '#D32F2F',
-            position: { x: entity.position.x, y: entity.position.y },
-          });
+
+          // Rule 3 (Level 3): In reflection states [-1] and [-i], burn ticks invert (enemy heals +2 HP, reflects -2 HP to player)
+          if (this.level.id === 3 && entity.id === this.rightEntity.id && (entity.currentPhaseIndex === 1 || entity.currentPhaseIndex === 2)) {
+            entity.heal(dmg);
+            this.leftEntity.takeDamage(dmg);
+            this.eventBus.emit('DAMAGE_DEALT', {
+              targetId: this.leftEntity.id,
+              amount: dmg,
+              color: '#D81B60',
+              position: { x: this.leftEntity.position.x, y: this.leftEntity.position.y },
+            });
+            this.eventBus.emit('MATH_FORMULA', {
+              latex: `\\times(-1) \\text{ Quemadura Invertida! (+}${dmg}/-${dmg})`,
+              position: { x: entity.position.x, y: entity.position.y },
+              color: '#D81B60',
+            });
+          } else {
+            entity.takeDamage(dmg);
+            this.eventBus.emit('DAMAGE_DEALT', {
+              targetId: entity.id,
+              amount: dmg,
+              color: '#D32F2F',
+              position: { x: entity.position.x, y: entity.position.y },
+            });
+          }
         }
       }
 
@@ -193,6 +251,40 @@ export class SimulationEngine {
   }
 
   private handleMathCollision(a: BaseEntity, b: BaseEntity): void {
+    // Level 3 specific collision rules (e^x vs i)
+    if (this.level.id === 3 && ((a === this.leftEntity && b === this.rightEntity) || (b === this.leftEntity && a === this.rightEntity))) {
+      if (this.status === 'VICTORY' || this.status === 'DEFEAT') {
+        ElasticSolver.resolveCollision(a, b);
+        return;
+      }
+
+      const isIntangible = this.rightEntity.currentPhaseIndex === 0 || this.rightEntity.currentPhaseIndex === 2; // [i] or [-i]
+      if (isIntangible) {
+        // Intangible: NO elastic bounce! Overlaps without bouncing.
+        if (this.level3ContactCooldown <= 0) {
+          this.level3ContactCooldown = 0.8;
+          this.leftEntity.takeDamage(8);
+          this.eventBus.emit('DAMAGE_DEALT', {
+            targetId: this.leftEntity.id,
+            amount: 8,
+            color: '#D81B60',
+            position: { x: this.leftEntity.position.x, y: this.leftEntity.position.y },
+          });
+          const phaseName = this.rightEntity.currentPhaseIndex === 0 ? 'i' : '-i';
+          this.eventBus.emit('MATH_FORMULA', {
+            latex: `${phaseName} \\text{ penetración! (-8 HP)}`,
+            position: { x: this.leftEntity.position.x, y: this.leftEntity.position.y },
+            color: '#D81B60',
+          });
+        }
+        return;
+      } else {
+        // Solid states [-1] and [1]: Normal elastic bounce, 0 damage to both
+        ElasticSolver.resolveCollision(a, b);
+        return;
+      }
+    }
+
     // 1. Resolve elastic physics bounce first
     ElasticSolver.resolveCollision(a, b);
 
@@ -651,14 +743,23 @@ export class SimulationEngine {
   private updateLevelMechanics(dt: number): void {
     // Level 3 & 9: Imaginary unit phase rotation
     if (this.level.id === 3 || this.level.id === 9) {
-      const imag = this.leftEntity.symbol === 'i' ? this.leftEntity : this.rightEntity.symbol === 'i' ? this.rightEntity : null;
+      const imag = this.level.id === 3
+        ? this.rightEntity
+        : (this.leftEntity.id === 'imag' || this.leftEntity.symbol.includes('i'))
+        ? this.leftEntity
+        : this.rightEntity;
       if (imag) {
         this.imaginaryPhaseTimer += dt;
-        if (this.imaginaryPhaseTimer >= 3.0) {
+        while (this.imaginaryPhaseTimer >= 3.0) {
           this.imaginaryPhaseTimer -= 3.0;
           imag.currentPhaseIndex = (imag.currentPhaseIndex + 1) % 4;
           const phases = ['i (관통)', '-1 (반사)', '-i (관통+반사)', '1 (일반)'];
+          const symbols = ['i', '-1', '-i', '1'];
           const latexPhases = ['i \\times i = -1', '-1 \\times i = -i', '-i \\times i = 1', '1 \\times i = i'];
+          if (this.level.id === 3) {
+            imag.symbol = symbols[imag.currentPhaseIndex];
+            imag.name = symbols[imag.currentPhaseIndex];
+          }
           this.eventBus.emit('MATH_FORMULA', {
             latex: latexPhases[imag.currentPhaseIndex],
             position: { x: imag.position.x, y: imag.position.y },
@@ -675,6 +776,9 @@ export class SimulationEngine {
       const laser = this.activeLasers[i];
       if (laser.isTelegraph) {
         laser.telegraphTime -= dt;
+        if (this.level.id === 3 && laser.ownerId === this.leftEntity.id) {
+          laser.sourcePos = this.leftEntity.position.clone();
+        }
         if (laser.telegraphTime <= 0) {
           laser.isTelegraph = false; // Becomes active damaging beam
           this.eventBus.emit('LASER_FIRED', {
@@ -705,7 +809,7 @@ export class SimulationEngine {
 
           let hit = false;
           if (laser.curveType === 'EXPONENTIAL') {
-            hit = Curves.intersectsExponential(target.position, target.radius, laser.sourcePos, -50, 50);
+            hit = Curves.intersectsExponential(target.position, target.radius, laser.sourcePos, -50, 50, 0.15);
           } else if (laser.curveType === 'SECTOR') {
             hit = Curves.isInsideSector(
               target.position,
@@ -728,6 +832,60 @@ export class SimulationEngine {
 
           if (hit) {
             laser.hitEntityIds.push(target.id);
+
+            // Level 3 specific laser damage & reflection rules
+            if (this.level.id === 3) {
+              const normX = Math.max(0, Math.min(1, (target.position.x + 35) / 70));
+              const rawDamage = Math.round(4 + 17 * normX);
+
+              const isReflecting = target.currentPhaseIndex === 1 || target.currentPhaseIndex === 2; // [-1] or [-i]
+              if (isReflecting) {
+                // 100% of damage reflected back to player
+                this.leftEntity.takeDamage(rawDamage);
+                this.eventBus.emit('DAMAGE_DEALT', {
+                  targetId: this.leftEntity.id,
+                  amount: rawDamage,
+                  color: '#D81B60',
+                  position: { x: this.leftEntity.position.x, y: this.leftEntity.position.y },
+                });
+                this.eventBus.emit('MATH_FORMULA', {
+                  latex: `\\times(-1) \\text{ Reflejado! (-}${rawDamage})`,
+                  position: { x: target.position.x, y: target.position.y },
+                  color: '#D81B60',
+                });
+              } else {
+                // Normal hit on enemy [i] or [1]
+                target.takeDamage(rawDamage);
+                this.eventBus.emit('DAMAGE_DEALT', {
+                  targetId: target.id,
+                  amount: rawDamage,
+                  color: '#D32F2F',
+                  position: { x: target.position.x, y: target.position.y },
+                });
+                this.eventBus.emit('MATH_FORMULA', {
+                  latex: `e^x \\text{ (-}${rawDamage})`,
+                  position: { x: target.position.x, y: target.position.y },
+                  color: '#D32F2F',
+                });
+
+                // Apply Quemadura if impact is in flat/low section near asymptote (target.position.x <= 0)
+                if (target.position.x <= 0) {
+                  target.addStatus({
+                    type: 'BURN',
+                    durationRemaining: 3.0,
+                    tickInterval: 0.5,
+                    tickDamage: 2,
+                  });
+                  this.eventBus.emit('MATH_FORMULA', {
+                    latex: '\\text{Quemadura! (DoT)}',
+                    position: { x: target.position.x, y: target.position.y - 6 },
+                    color: '#FF5722',
+                  });
+                }
+              }
+              continue;
+            }
+
             // Check reflection if target has REFLECT status or is 'i' in phase -1
             if (target.symbol === 'i' && (target.currentPhaseIndex === 1 || target.currentPhaseIndex === 2)) {
               // Reflect damage back to owner
@@ -837,6 +995,11 @@ export class SimulationEngine {
   }
 
   private triggerEnemyAttack(): void {
+    if (this.level.id === 3) {
+      // In Level 3, Enemy i does not fire lasers; it relies on state cycling, penetration, and reflection
+      return;
+    }
+
     if (!this.rightEntity.isDead) {
       this.rightEntity.cooldownRemaining = 0;
       this.triggerSkill('RIGHT');

@@ -450,6 +450,18 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
         ctx.beginPath();
         ctx.arc(p.x, p.y, r + 4, 0, Math.PI * 2);
         ctx.stroke();
+
+        // Fiery sparks / particles from burning body
+        for (let sp = 0; sp < 4; sp++) {
+          const spAngle = (Date.now() * 0.006 + sp * (Math.PI / 2)) % (Math.PI * 2);
+          const spDist = r + 5 + ((sp * 3) % 6);
+          const spX = p.x + Math.cos(spAngle) * spDist;
+          const spY = p.y + Math.sin(spAngle) * spDist;
+          ctx.fillStyle = sp % 2 === 0 ? '#FFD54F' : '#FF5722';
+          ctx.beginPath();
+          ctx.arc(spX, spY, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
         ctx.restore();
       }
 

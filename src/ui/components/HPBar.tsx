@@ -83,7 +83,7 @@ export const HPBar: React.FC<HPBarProps> = ({
     if (levelId === 8 || levelId === 9) {
       return `[${t.nextSector} θ = ${(rightEntity.sectorAngle / Math.PI).toFixed(2)}π]`;
     }
-    if (rightEntity.symbol === 'i') {
+    if (levelId === 3 || rightEntity.symbol === 'i' || rightEntity.symbol === '-1' || rightEntity.symbol === '-i' || rightEntity.symbol === '1') {
       const phases = [
         `[${t.phaseI}]`,
         `[${t.phaseMinus1}]`,
@@ -105,7 +105,12 @@ export const HPBar: React.FC<HPBarProps> = ({
       const count = Math.max(1, derivativeHitCount);
       return isKo ? `[미분 시도 ${count}회]` : `[${t.derivativeAttempt} ${count}]`;
     }
-    if (levelId === 3 || levelId === 8) {
+    if (levelId === 3) {
+      return leftEntity.isReady()
+        ? `[${t.expBlade}]`
+        : `[${t.blade} ${leftEntity.cooldownRemaining.toFixed(1)}s]`;
+    }
+    if (levelId === 8) {
       return `[${t.blade}]`;
     }
     if (levelId === 4) {

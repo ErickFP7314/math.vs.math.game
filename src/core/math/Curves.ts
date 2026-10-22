@@ -34,6 +34,7 @@ export class Curves {
     origin: Vector2D,
     minX: number,
     maxX: number,
+    scale = 1,
     samples = 32
   ): boolean {
     const xStart = Math.max(minX, circleCenter.x - radius);
@@ -46,7 +47,7 @@ export class Curves {
 
     for (let i = 0; i <= samples; i++) {
       const x = xStart + i * step;
-      const y = this.evalExponential(x, origin);
+      const y = this.evalExponential(x, origin, scale);
       const dx = x - circleCenter.x;
       const dy = y - circleCenter.y;
       if (dx * dx + dy * dy <= rSq) {

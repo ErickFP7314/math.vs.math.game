@@ -185,6 +185,8 @@ describe('SimulationEngine', () => {
     expect(engine.isFrozen).toBe(true);
 
     const initialEnemyPos = engine.rightEntity.position.clone();
+    // Keep player safely away so random kinematics do not trigger a collision during this freeze check
+    engine.leftEntity.position = vec2(-30, -30);
     const initialPlayerPos = engine.leftEntity.position.clone();
     // Advance slightly while frozen - enemy should NOT move, but player continues moving freely
     engine.update(0.1);
@@ -517,5 +519,203 @@ describe('SimulationEngine', () => {
     expect(c1.polyDegree).toBe(2);
     expect(c1.symbol).toContain('x^2');
     expect(engine.subEntities.length).toBe(3);
+  });
+
+  describe('Level 3 (reglas2/nivel3.md) Specifications', () => {
+    it('initializes Level 3 with e^x (80 HP, 1s initial cooldown) vs i (50 HP, State [i])', () => {
+      const level3 = LevelRegistry.getLevel(3)!;
+      const engine = new SimulationEngine(level3);
+
+      expect(engine.leftEntity.symbol).toBe('eˣ');
+      expect(engine.leftEntity.hp).toBe(80);
+      expect(engine.leftEntity.maxHp).toBe(80);
+      expect(engine.rightEntity.symbol).toBe('i');
+      expect(engine.rightEntity.hp).toBe(50);
+      expect(engine.rightEntity.maxHp).toBe(50);
+
+      // Finish countdown
+      engine.update(3.1);
+      expect(engine.status).toBe('COMBAT');
+      expect(engine.leftEntity.cooldownRemaining).toBeCloseTo(1.0, 1);
+      expect(engine.rightEntity.currentPhaseIndex).toBe(0);
+    });
+
+    it('triggers Exponential Blade on player cooldown (1s initial, 3s loop)', () => {
+      const level3 = LevelRegistry.getLevel(3)!;
+      const engine = new SimulationEngine(level3);
+
+      engine.update(3.1); // Combat starts, cooldown is 1.0s
+      expect(engine.activeLasers.length).toBe(0);
+
+      // Advance 1s -> Exponential blade telegraph activates
+      engine.update(1.05);
+      expect(engine.activeLasers.length).toBe(1);
+      const blade = engine.activeLasers[0];
+      expect(blade.curveType).toBe('EXPONENTIAL');
+      expect(blade.isTelegraph).toBe(true);
+      expect(engine.leftEntity.cooldownRemaining).toBeCloseTo(3.0, 1);
+
+      // During telegraph, moving player updates laser sourcePos in real-time
+      engine.leftEntity.position = vec2(-15, 8);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.update(0.1);
+      expect(blade.sourcePos.x).toBeCloseTo(-15, 1);
+      expect(blade.sourcePos.y).toBeCloseTo(8, 1);
+
+      // At end of telegraph (1s), laser becomes active
+      engine.update(0.95);
+      expect(blade.isTelegraph).toBe(false);
+    });
+
+    it('handles State 1 [i]: intangible, no bounce, deals -8 HP on overlap, vulnerable to blade and burn', () => {
+      const testBus = new EventBus();
+      const level3 = LevelRegistry.getLevel(3)!;
+      const engine = new SimulationEngine(level3, testBus);
+
+      engine.update(3.1); // Combat, State 0 ([i])
+      expect(engine.rightEntity.currentPhaseIndex).toBe(0);
+
+      const playerVelBefore = engine.leftEntity.velocity.clone();
+      const enemyVelBefore = engine.rightEntity.velocity.clone();
+
+      // Overlap player and enemy
+      engine.leftEntity.position = vec2(0, 0);
+      engine.rightEntity.position = vec2(0, 0);
+      engine.update(1 / 60);
+
+      // Intangible: NO elastic bounce, velocities NOT reversed/deflected
+      expect(engine.leftEntity.velocity.x).toBe(playerVelBefore.x);
+      expect(engine.leftEntity.velocity.y).toBe(playerVelBefore.y);
+      expect(engine.rightEntity.velocity.x).toBe(enemyVelBefore.x);
+      expect(engine.rightEntity.velocity.y).toBe(enemyVelBefore.y);
+
+      // Deals -8 HP to player on contact
+      expect(engine.leftEntity.hp).toBe(72); // 80 - 8
+      expect(engine.rightEntity.hp).toBe(50); // Enemy receives 0 contact damage
+    });
+
+    it('handles State 2 [-1]: solid bounce (0 contact damage), reflects 100% of blade damage, inverts burn ticks', () => {
+      const testBus = new EventBus();
+      const level3 = LevelRegistry.getLevel(3)!;
+      const engine = new SimulationEngine(level3, testBus);
+
+      engine.update(3.1); // Combat
+      engine.update(3.0); // Advance 3s -> State 1 ([-1])
+      expect(engine.rightEntity.currentPhaseIndex).toBe(1);
+
+      // Overlap player and enemy
+      engine.leftEntity.position = vec2(-5, 0);
+      engine.leftEntity.velocity = vec2(20, 0);
+      engine.rightEntity.position = vec2(5, 0);
+      engine.rightEntity.velocity = vec2(-20, 0);
+      const playerHpBefore = engine.leftEntity.hp;
+      const enemyHpBefore = engine.rightEntity.hp;
+
+      engine.update(1 / 60);
+
+      // Solid bounce: velocities deflected
+      expect(engine.leftEntity.velocity.x).toBeLessThan(0);
+      expect(engine.rightEntity.velocity.x).toBeGreaterThan(0);
+      // 0 contact damage to both!
+      expect(engine.leftEntity.hp).toBe(playerHpBefore);
+      expect(engine.rightEntity.hp).toBe(enemyHpBefore);
+
+      // Now test blade reflection in State [-1]:
+      // Fire an active EXPONENTIAL laser touching enemy at x = 0 (scaled damage ~12)
+      // At x = 0, y = 0 + exp(20 * 0.15) ≈ 20.08, so enemy at (0, 20) touches the beam
+      engine.rightEntity.position = vec2(0, 20);
+      engine.rightEntity.velocity = vec2(0, 0);
+      engine.leftEntity.position = vec2(-20, 0);
+      engine.leftEntity.velocity = vec2(0, 0);
+      const initialPlayerHp = engine.leftEntity.hp;
+      engine.activeLasers = [
+        {
+          id: 'test_exp_blade',
+          ownerId: engine.leftEntity.id,
+          sourcePos: vec2(-20, 0),
+          curveType: 'EXPONENTIAL',
+          isTelegraph: false,
+          telegraphTime: 0,
+          durationRemaining: 0.5,
+          damage: 21,
+        },
+      ];
+
+      engine.update(0.016);
+
+      // Enemy takes 0 damage!
+      expect(engine.rightEntity.hp).toBe(enemyHpBefore);
+      // Player takes 100% reflected damage!
+      expect(engine.leftEntity.hp).toBeLessThan(initialPlayerHp);
+
+      // Test Quemadura inversion in State [-1]:
+      engine.rightEntity.hp = 30;
+      engine.rightEntity.addStatus({
+        type: 'BURN',
+        durationRemaining: 2.0,
+        tickInterval: 0.5,
+        tickDamage: 2,
+      });
+
+      const playerHpPreBurn = engine.leftEntity.hp;
+      engine.update(0.55);
+
+      // Enemy HEALS +2 HP!
+      expect(engine.rightEntity.hp).toBe(32);
+      // Player takes -2 HP reflected damage!
+      expect(engine.leftEntity.hp).toBe(playerHpPreBurn - 2);
+    });
+
+    it('handles State 3 [-i]: intangible (-8 HP contact), reflects blade and inverts burn', () => {
+      const level3 = LevelRegistry.getLevel(3)!;
+      const engine = new SimulationEngine(level3);
+
+      engine.update(3.1); // Combat
+      engine.update(6.0); // Advance 6s -> State 2 ([-i])
+      expect(engine.rightEntity.currentPhaseIndex).toBe(2);
+
+      // Contact deals -8 HP and does not bounce
+      engine.leftEntity.position = vec2(0, 0);
+      engine.rightEntity.position = vec2(0, 0);
+      const hpBefore = engine.leftEntity.hp;
+      engine.update(1 / 60);
+      expect(engine.leftEntity.hp).toBe(hpBefore - 8);
+
+      // Reflects burn
+      engine.rightEntity.hp = 20;
+      engine.rightEntity.addStatus({
+        type: 'BURN',
+        durationRemaining: 2.0,
+        tickInterval: 0.5,
+        tickDamage: 2,
+      });
+      const pPreBurn = engine.leftEntity.hp;
+      engine.update(0.55);
+      expect(engine.rightEntity.hp).toBe(22);
+      expect(engine.leftEntity.hp).toBe(pPreBurn - 2);
+    });
+
+    it('handles State 4 [1]: solid bounce (0 contact damage) and normal vulnerability', () => {
+      const level3 = LevelRegistry.getLevel(3)!;
+      const engine = new SimulationEngine(level3);
+
+      engine.update(3.1); // Combat
+      engine.update(9.0); // Advance 9s -> State 3 ([1])
+      expect(engine.rightEntity.currentPhaseIndex).toBe(3);
+
+      // Burn ticks normally: enemy takes damage, player takes no damage
+      engine.rightEntity.hp = 40;
+      engine.rightEntity.addStatus({
+        type: 'BURN',
+        durationRemaining: 2.0,
+        tickInterval: 0.5,
+        tickDamage: 2,
+      });
+      const playerHp = engine.leftEntity.hp;
+      engine.update(0.55);
+
+      expect(engine.rightEntity.hp).toBe(38); // 40 - 2
+      expect(engine.leftEntity.hp).toBe(playerHp); // untouched
+    });
   });
 });
