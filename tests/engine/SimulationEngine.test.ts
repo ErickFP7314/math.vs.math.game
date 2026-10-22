@@ -489,11 +489,15 @@ describe('SimulationEngine', () => {
     expect(engine.leftEntity.symbol).toBe('∫');
     expect(engine.rightEntity.symbol).toBe('eˣ');
 
-    // Hit 1: ∫ vs e^x -> spawns C1 and damages e^x
+    // Wait until whip is ready (1s initial cooldown)
+    engine.update(1.0);
+    expect(engine.leftEntity.isReady()).toBe(true);
+
+    // Hit 1: ∫ vs e^x -> spawns C1 and whip damages e^x (-12 HP: -7 and -5)
     engine.leftEntity.position = engine.rightEntity.position.clone();
     engine.update(1 / 60);
 
-    expect(engine.rightEntity.hp).toBe(70); // 80 - 10
+    expect(engine.rightEntity.hp).toBe(68); // 80 - 12
     expect(engine.subEntities.length).toBe(1);
     const c1 = engine.subEntities[0];
     expect(c1.polyDegree).toBe(0);
@@ -501,23 +505,25 @@ describe('SimulationEngine', () => {
     // Move e^x away to collide specifically with c1
     engine.rightEntity.position = vec2(40, 40);
 
-    // Hit 2: ∫ vs C1 -> upgrades to C1 x and spawns C2
+    // Hit 2: ∫ vs C1 -> upgrades to C1 x, spawns C2 and fires linear beam
     c1.position = vec2(0, 0);
+    c1.invulnerabilityTimer = 0;
     engine.leftEntity.position = vec2(0, 0);
     engine.update(1 / 60);
 
     expect(c1.polyDegree).toBe(1);
-    expect(c1.symbol).toBe('C_{1}x');
+    expect(c1.symbol).toBe('C_1 x');
     expect(engine.subEntities.length).toBe(2);
 
     // Hit 3: ∫ vs C1x -> upgrades to C1/2 x^2 and spawns C3
     engine.subEntities[1].position = vec2(-40, -40);
     c1.position = vec2(0, 0);
+    c1.invulnerabilityTimer = 0;
     engine.leftEntity.position = vec2(0, 0);
     engine.update(1 / 60);
 
     expect(c1.polyDegree).toBe(2);
-    expect(c1.symbol).toContain('x^2');
+    expect(c1.symbol).toBe('\\frac{C_1}{2}x^2');
     expect(engine.subEntities.length).toBe(3);
   });
 
@@ -1191,6 +1197,253 @@ describe('SimulationEngine', () => {
 
       // Player took 0 damage on dodge
       expect(engine.leftEntity.hp).toBe(75);
+    });
+  });
+
+  describe('Level 6 (reglas2/nivel6.md) Specifications', () => {
+    it('Test 1: Node Collision Asymmetry (∫ bounces solidly, e^x phases through like a ghost)', () => {
+      const level6 = LevelRegistry.getLevel(6)!;
+      const engine = new SimulationEngine(level6);
+
+      engine.update(3.1); // Enter combat
+
+      // Place node C1 at the center
+      const c1 = new BaseEntity({
+        id: 'c1_node',
+        name: 'C1',
+        symbol: 'C_1',
+        team: 'SUB_ENTITY',
+        color: '#F57C00',
+        bgColor: '#FFE0B2',
+        hp: 2,
+        maxHp: 2,
+        radius: 4.5,
+        mass: 1e9,
+        position: vec2(0, 0),
+        velocity: vec2(0, 0),
+      });
+      c1.cIndex = 1;
+      c1.polyDegree = 0;
+      engine.subEntities = [c1];
+
+      // e^x launched directly toward C1 from (15, 0) with velocity (-30, 0)
+      engine.rightEntity.position = vec2(15, 0);
+      engine.rightEntity.velocity = vec2(-30, 0);
+
+      // Keep player ∫ far away at (-40, -40)
+      engine.leftEntity.position = vec2(-40, -40);
+      engine.leftEntity.velocity = vec2(0, 0);
+
+      // Advance physics: e^x moves through (0, 0) without bouncing or deflecting
+      engine.update(0.6); // 15 - 30 * 0.6 = -3.0
+      expect(engine.rightEntity.position.x).toBeLessThan(0);
+      expect(engine.rightEntity.velocity.x).toBe(-30); // Velocity completely unhampered!
+      expect(c1.polyDegree).toBe(0); // C1 not integrated by e^x
+      expect(engine.subEntities.length).toBe(1);
+
+      // Now launch ∫ toward C1 from (-15, 0) with velocity (30, 0)
+      engine.rightEntity.position = vec2(40, 40);
+      engine.rightEntity.velocity = vec2(0, 0);
+
+      engine.leftEntity.position = vec2(-10, 0);
+      engine.leftEntity.velocity = vec2(30, 0);
+
+      // Update 1 frame to trigger collision
+      engine.update(1 / 60);
+
+      // ∫ bounces solidly: velocity.x reflected to negative
+      expect(engine.leftEntity.velocity.x).toBeLessThan(0);
+      // C1 transforms into C1 x and spawns C2
+      expect(c1.polyDegree).toBe(1);
+      expect(c1.symbol).toBe('C_1 x');
+      expect(engine.subEntities.length).toBe(2);
+    });
+
+    it('Test 2: Exact Factorial Progression (C1 -> C1 x -> C1/2 x^2 -> C1/6 x^3 -> C1/24 x^4 -> C1/120 x^5)', () => {
+      const level6 = LevelRegistry.getLevel(6)!;
+      const engine = new SimulationEngine(level6);
+
+      engine.update(3.1); // Enter combat
+
+      // Start with C1 at (0, 0)
+      const c1 = new BaseEntity({
+        id: 'c1_factorial_test',
+        name: 'C1',
+        symbol: 'C_1',
+        team: 'SUB_ENTITY',
+        color: '#F57C00',
+        bgColor: '#FFE0B2',
+        hp: 2,
+        maxHp: 2,
+        radius: 4.5,
+        mass: 1e9,
+        position: vec2(0, 0),
+        velocity: vec2(0, 0),
+      });
+      c1.cIndex = 1;
+      c1.polyDegree = 0;
+      engine.subEntities = [c1];
+
+      // Keep e^x far away
+      engine.rightEntity.position = vec2(40, 40);
+      engine.rightEntity.velocity = vec2(0, 0);
+
+      let prevRadius = c1.radius;
+
+      // 5 successive bounces against the same C1 node:
+      const expectedSymbols = [
+        'C_1 x',
+        '\\frac{C_1}{2}x^2',
+        '\\frac{C_1}{6}x^3',
+        '\\frac{C_1}{24}x^4',
+        '\\frac{C_1}{120}x^5',
+      ];
+
+      for (let bounce = 0; bounce < 5; bounce++) {
+        c1.invulnerabilityTimer = 0; // ready for next bounce
+        engine.leftEntity.position = vec2(0, 0);
+        engine.update(1 / 60);
+
+        expect(c1.polyDegree).toBe(bounce + 1);
+        expect(c1.symbol).toBe(expectedSymbols[bounce]);
+        expect(c1.radius).toBeGreaterThan(prevRadius);
+        prevRadius = c1.radius;
+
+        // Move away newly spawned constants so only C1 is at (0, 0)
+        for (let s = 1; s < engine.subEntities.length; s++) {
+          engine.subEntities[s].position = vec2(-45, -45);
+        }
+      }
+
+      // Initial C1 + 5 newly generated constants = 6 total sub-entities
+      expect(engine.subEntities.length).toBe(6);
+    });
+
+    it('Test 3: Polynomial Beam Damage vs. Whip Strike Damage', () => {
+      const level6 = LevelRegistry.getLevel(6)!;
+      const engine = new SimulationEngine(level6);
+
+      engine.update(3.1); // Enter combat
+      expect(engine.rightEntity.hp).toBe(80);
+
+      // Wait until whip is ready (1s initial cooldown)
+      engine.update(1.0);
+      expect(engine.leftEntity.isReady()).toBe(true);
+
+      // Hit 1: Direct whip strike on e^x -> -7 and -5 (total -12 HP) and 5s cooldown
+      engine.leftEntity.position = engine.rightEntity.position.clone();
+      engine.update(1 / 60);
+
+      expect(engine.rightEntity.hp).toBe(68); // 80 - 12
+      expect(engine.leftEntity.cooldownRemaining).toBeCloseTo(5.0, 1);
+
+      // Clear spawned constants & lasers
+      engine.subEntities = [];
+      engine.activeLasers = [];
+
+      // Place a node at (0, 0) and position e^x at (10, 10)
+      const cNode = new BaseEntity({
+        id: 'c_beam_node',
+        name: 'C1',
+        symbol: 'C_1',
+        team: 'SUB_ENTITY',
+        color: '#F57C00',
+        bgColor: '#FFE0B2',
+        hp: 2,
+        maxHp: 2,
+        radius: 4.5,
+        mass: 1e9,
+        position: vec2(0, 0),
+        velocity: vec2(0, 0),
+      });
+      cNode.cIndex = 1;
+      cNode.polyDegree = 0;
+      engine.subEntities = [cNode];
+
+      engine.rightEntity.position = vec2(10, 10); // Sits on line y = x (LINEAR beam through (0, 0))
+      engine.rightEntity.velocity = vec2(0, 0);
+
+      // Whip is currently still on cooldown (~4.9s remaining)
+      expect(engine.leftEntity.isReady()).toBe(false);
+
+      // Player integrates cNode -> evolves to degree 1 (LINEAR beam) and fires haz
+      engine.leftEntity.position = vec2(0, 0);
+      engine.update(1 / 60);
+
+      // Beam crosses e^x at (10, 10) and inflicts exactly -4 HP (68 - 4 = 64 HP)
+      expect(engine.rightEntity.hp).toBe(64);
+
+      // Whip cooldown is independent of beam firing
+      expect(engine.leftEntity.isReady()).toBe(false);
+    });
+
+    it('Test 4: Node Destruction by e^x Exponential Blade', () => {
+      const level6 = LevelRegistry.getLevel(6)!;
+      const engine = new SimulationEngine(level6);
+
+      engine.update(3.1); // Enter combat
+
+      // Place node C1 at (0, 0) with 2 HP
+      const c1 = new BaseEntity({
+        id: 'c1_destructible',
+        name: 'C1',
+        symbol: 'C_1',
+        team: 'SUB_ENTITY',
+        color: '#F57C00',
+        bgColor: '#FFE0B2',
+        hp: 2,
+        maxHp: 2,
+        radius: 4.5,
+        mass: 1e9,
+        position: vec2(0, 0),
+        velocity: vec2(0, 0),
+      });
+      engine.subEntities = [c1];
+
+      // Keep player far away
+      engine.leftEntity.position = vec2(-40, -40);
+
+      // Shot 1: Exponential laser cuts across (0, 0)
+      engine.activeLasers = [
+        {
+          id: 'exp_blade_1',
+          ownerId: engine.rightEntity.id,
+          sourcePos: vec2(0, -1), // y = -1 + exp(0.15 * x) -> at x = 0, y = 0
+          curveType: 'EXPONENTIAL',
+          isTelegraph: false,
+          telegraphTime: 0,
+          durationRemaining: 0.5,
+          damage: 4,
+        },
+      ];
+
+      engine.update(1 / 60);
+
+      // C1 receives -1 damage
+      expect(c1.hp).toBe(1);
+      expect(c1.isDead).toBe(false);
+      expect(engine.subEntities.length).toBe(1);
+
+      // Shot 2: Exponential laser cuts across (0, 0) again
+      engine.activeLasers = [
+        {
+          id: 'exp_blade_2',
+          ownerId: engine.rightEntity.id,
+          sourcePos: vec2(0, -1),
+          curveType: 'EXPONENTIAL',
+          isTelegraph: false,
+          telegraphTime: 0,
+          durationRemaining: 0.5,
+          damage: 4,
+        },
+      ];
+
+      engine.update(1 / 60);
+
+      // C1 receives second -1 damage, HP drops to 0, node is destroyed and removed!
+      expect(c1.hp).toBe(0);
+      expect(c1.isDead).toBe(true);
+      expect(engine.subEntities.length).toBe(0);
     });
   });
 });

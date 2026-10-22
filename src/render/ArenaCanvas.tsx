@@ -485,17 +485,37 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
         ctx.fillText(currentDigit.toString(), ox, oy);
       }
 
-      // Orbital Curl for Integral (∫)
+      // Apéndice / Cola ("Látigo ∫") for Integral (∫)
       if (entity.symbol === '∫') {
-        const orbitAngle = Date.now() * 0.0025;
-        const ox = p.x + (r + 14) * Math.cos(orbitAngle);
-        const oy = p.y + (r + 14) * Math.sin(orbitAngle);
+        const orbitAngle = Date.now() * 0.0035;
+        const isReady = entity.isReady();
+        const whipLen = r + 15;
+        const tipX = p.x + whipLen * Math.cos(orbitAngle);
+        const tipY = p.y + whipLen * Math.sin(orbitAngle);
 
-        ctx.font = 'bold 16px serif';
-        ctx.fillStyle = '#FB8C00';
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = isReady ? '#FFA000' : 'rgba(251, 140, 0, 0.45)';
+        ctx.lineWidth = isReady ? 3.5 : 2;
+        if (isReady) {
+          ctx.shadowColor = '#FFB300';
+          ctx.shadowBlur = 8;
+        }
+        ctx.moveTo(p.x + r * Math.cos(orbitAngle), p.y + r * Math.sin(orbitAngle));
+        ctx.lineTo(tipX, tipY);
+        ctx.stroke();
+
+        // Tip hook
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, 4, orbitAngle - Math.PI / 2, orbitAngle + Math.PI / 2);
+        ctx.stroke();
+
+        ctx.font = 'bold 14px serif';
+        ctx.fillStyle = isReady ? '#FFD54F' : '#FFA000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('∫', ox, oy);
+        ctx.fillText('∫', tipX + 4 * Math.cos(orbitAngle), tipY + 4 * Math.sin(orbitAngle));
+        ctx.restore();
       }
 
       // Visual blinking during invulnerability period (Requirement 2)

@@ -343,33 +343,60 @@ export const MathInfoScreen: React.FC<MathInfoScreenProps> = ({
           : 'As d/dx, you cannot defeat sin x through melee contact due to its infinite cycle. You must evade its periodic waves (-25 HP) while watching the arena power-up nodes.',
       },
       6: {
-        mainFormula: '\\int e^x dx = e^x + C',
+        mainFormula: '\\int e^x dx = e^x + C_n',
         theoremName: isEs
-          ? 'Integral Indefinida y Familia de Curvas'
+          ? 'Integral Indefinida y Regla de la Potencia'
           : isKo
-          ? '부정적분과 적분상수 C'
-          : 'Indefinite Integral & Family of Curves',
+          ? '부정적분과 거듭제곱 역법칙'
+          : 'Indefinite Integral & Inverse Power Rule',
         explanation: isEs
-          ? 'La integración es la operación inversa a la derivación. Al calcular la antiderivada de e^x, surge la constante de integración C ∈ ℝ, generando una familia infinita de curvas paralelas.'
+          ? 'La integral de eˣ es invariante salvo por una constante arbitraria Cₙ. Al integrar sucesivamente las constantes y monomios generados, estos escalan factorialmente en grado (Cₙ/k! xᵏ).'
           : isKo
-          ? '적분은 미분의 역연산입니다. e^x의 부정적분은 임의의 적분상수 C ∈ ℝ를 생성하며, 평행 이동된 무한한 곡선 족을 형성합니다.'
-          : 'Integration is the inverse operation of differentiation. Integrating e^x produces a constant of integration C, giving rise to an infinite family of parallel curves.',
+          ? 'eˣ의 적분은 임의의 적분상수 Cₙ를 제외하고 불변입니다. 생성된 상수와 단항식을 계속 적분하면 계수가 팩토리얼(Cₙ/k! xᵏ)로 증가합니다.'
+          : 'The integral of eˣ is invariant up to an arbitrary constant Cₙ. Successive integrations of constants and monomials scale factorially in degree (Cₙ/k! xᵏ).',
         breakdownList: [
           {
-            title: isEs ? 'Engendrar Constantes' : isKo ? '적분 상수 생성' : 'Constant Spawning',
-            math: 'C_1, C_2, C_3 \\dots \\in \\mathbb{R}',
+            title: isEs ? 'Invarianza y Constantes' : isKo ? '불변성과 적분상수' : 'Invariance & Constants',
+            math: '\\int e^x dx = e^x + C_n',
             desc: isEs
-              ? 'Cada colisión del operador integral crea esferas aliadas de constante C que atacan en conjunto.'
+              ? 'El choque de ∫ contra eˣ engendra un nodo constante estático Cₙ en la arena. Si el látigo está listo, inflige -12 HP directos (-7 y -5).'
               : isKo
-              ? '적분 연산자가 충돌할 때마다 아군 상수 C 구체가 전장에 소환되어 합동 공격을 펼칩니다.'
-              : 'Each impact by the integral spawns allied constant spheres C_k that swarm the opponent.',
+              ? '∫와 eˣ의 충돌은 전장에 정적 상수 노드 Cₙ을 생성합니다. 채찍이 준비된 상태면 -12 HP 즉시 피해(-7 및 -5)를 입힙니다.'
+              : 'Colliding with eˣ spawns a static constant node Cₙ. If the whip is ready, it deals -12 direct damage (-7 and -5).',
+          },
+          {
+            title: isEs ? 'Escalado Factorial de Nodos' : isKo ? '노드의 팩토리얼 계수 승격' : 'Factorial Degree Scaling',
+            math: 'C_n \\xrightarrow{\\int} C_n x \\xrightarrow{\\int} \\frac{C_n}{2}x^2 \\dots \\left(\\frac{C_n}{k!}x^k\\right)',
+            desc: isEs
+              ? 'Al chocar contra un nodo aliado, este sube de grado k→k+1 dividiéndose por el factorial correspondiente y genera una nueva constante C.'
+              : isKo
+              ? '아군 노드와 충돌하면 차수가 k→k+1로 상승하고 해당 팩토리얼로 나누어지며, 새로운 상수 C가 추가 생성됩니다.'
+              : 'Colliding with an allied node upgrades its degree k→k+1 divided by k! and generates a brand-new constant C.',
+          },
+          {
+            title: isEs ? 'Haces Polinómicos' : isKo ? '다항식 레이저 방출' : 'Polynomial Beams',
+            math: '\\text{Haz } (k \\ge 1) \\implies -4\\text{ HP a } e^x',
+            desc: isEs
+              ? 'Cada integración de nodo dispara su haz gráfico (recta, parábola o cúbica). Si cruza a eˣ, le resta -4 HP por haz.'
+              : isKo
+              ? '노드가 승격될 때마다 해당 다항식 그래프(직선, 포물선, 3차 곡선) 레이저를 방출하여 eˣ에 -4 HP 피해를 입힙니다.'
+              : 'Each node upgrade emits its polynomial beam (line, parabola, or cubic). If it crosses eˣ, it inflicts -4 HP per line.',
+          },
+          {
+            title: isEs ? 'Destrucción de Nodos por eˣ' : isKo ? 'eˣ에 의한 노드 파괴' : 'Node Destruction by eˣ',
+            math: 'e^x \\text{ atraviesa nodos, cortándolos (-1 HP)}',
+            desc: isEs
+              ? 'eˣ es intangible a los nodos naranjas, pero su Cuchilla Exponencial los daña con cortes de -1 HP hasta destruirlos.'
+              : isKo
+              ? 'eˣ는 주황색 노드를 관통하지만, 지수 칼날로 노드를 -1 HP씩 베어내어 파괴할 수 있습니다.'
+              : 'eˣ phases through orange nodes, but its Exponential Blade cuts them for -1 HP until destroyed.',
           },
         ],
         mechanicSummary: isEs
-          ? 'Juegas como ∫. A medida que golpeas a e^x, engendras esferas C que disparan ráfagas y aumentan tu superioridad numérica.'
+          ? 'Como ∫, rebota contra tus propios nodos para disparar haces continuos a eˣ y golpea con tu látigo cada 5s, mientras evades las cuchillas exponenciales.'
           : isKo
-          ? '플레이어는 적분 기호 ∫입니다. e^x를 타격할 때마다 C 구체를 늘려 화력과 수적 우위를 확보하세요.'
-          : 'You play as ∫. Hitting e^x breeds allied constant spheres C that fire beams and overwhelm the enemy.',
+          ? '∫로서 자신의 노드에 튕기며 eˣ에 지속적인 빔 공격을 퍼붓고, 5초마다 채찍으로 강타하며 지수 칼날을 피하세요.'
+          : 'As ∫, bounce between your own nodes to fire continuous beams at eˣ and strike with your whip every 5s while evading exponential blades.',
       },
       7: {
         mainFormula: '\\frac{d}{dx}\\sin(x) = \\cos(x),\\quad \\frac{d}{dx}\\cos(x) = -\\sin(x)',

@@ -67,8 +67,8 @@ export const HPBar: React.FC<HPBarProps> = ({
     if (rightEntity.hasStatus('BURN')) return `[${t.onFire}]`;
     if (rightEntity.isImmuneToDerivative && levelId === 2) return `[${t.blade}]`;
 
-    if (levelId === 4) {
-      if (leftEntity.hasStatus('BURN')) return `[${t.burning}]`;
+    if (levelId === 4 || levelId === 6) {
+      if (leftEntity.hasStatus('BURN')) return isEs ? '[¡Quemando!]' : `[${t.burning}]`;
       if (isTelegraphing || rightEntity.tag === 'TELEGRAPH') return `[${t.expBlade}]`;
       return `[Cooldown ${Math.ceil(rightEntity.cooldownRemaining)}s]`;
     }
@@ -76,7 +76,7 @@ export const HPBar: React.FC<HPBarProps> = ({
     if (levelId === 1) {
       return isKo ? `[공 ${activeSpheresCount}개]` : `[${activeSpheresCount} ${t.spheresCount}]`;
     }
-    if (levelId === 2 || levelId === 6 || levelId === 8) {
+    if (levelId === 2 || levelId === 8) {
       return `[${t.blade}]`;
     }
     if (levelId === 5) {
@@ -106,7 +106,7 @@ export const HPBar: React.FC<HPBarProps> = ({
 
   const getLeftBadge = () => {
     if (engineStatus === 'COUNTDOWN') return levelId === 5 ? '[READY]' : `[${t.ready}]`;
-    if (leftEntity.hasStatus('BURN')) return `[${t.onFire}]`;
+    if (leftEntity.hasStatus('BURN')) return isEs ? '[¡Quemando!]' : `[${t.onFire}]`;
     if (levelId === 1) {
       const count = Math.max(1, derivativeHitCount);
       return isKo ? `[미분 ${count}회]` : `[${t.derivationsCount} ${count}]`;
@@ -134,7 +134,10 @@ export const HPBar: React.FC<HPBarProps> = ({
       return `[${t.partialYReady}]`;
     }
     if (levelId === 6) {
-      return `[${t.integralWhipReady}]`;
+      if (leftEntity.isReady()) {
+        return isEs ? '[Látigo ∫ listo]' : `[${t.integralWhipReady}]`;
+      }
+      return `[Cooldown ${Math.ceil(leftEntity.cooldownRemaining)}s]`;
     }
     if (levelId === 7) {
       const ampStr = leftEntity.amplitude > 1 ? `${leftEntity.amplitude}` : '';
