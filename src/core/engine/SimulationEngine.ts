@@ -51,6 +51,8 @@ export class SimulationEngine {
   level5MatchTime = 0;
   level5SpawnedB2 = false;
   level5SpawnedA2 = false;
+  level6ContactCooldown = 0;
+  integralWhipAngle = 0;
 
   eventBus: EventBus;
   laserIdCounter = 0;
@@ -120,6 +122,8 @@ export class SimulationEngine {
       this.rightEntity.cooldownMax = 3.0;
       this.rightEntity.cooldownRemaining = 1.0;
       this.integralConstantCount = 0;
+      this.level6ContactCooldown = 0;
+      this.integralWhipAngle = 0;
     }
   }
 
@@ -176,6 +180,8 @@ export class SimulationEngine {
           this.rightEntity.cooldownMax = 3.0;
           this.rightEntity.cooldownRemaining = 1.0;
           this.integralConstantCount = 0;
+          this.level6ContactCooldown = 0;
+          this.integralWhipAngle = 0;
           this.subEntities = [];
         }
         this.eventBus.emit('MATCH_START', { levelId: this.level.id });
@@ -317,6 +323,61 @@ export class SimulationEngine {
         }
       }
 
+      // Level 6: Integral Whip physical reach check against e^x
+      if (this.level.id === 6) {
+        const player = this.leftEntity;
+        const enemy = this.rightEntity;
+
+        if (!player.isDead && !enemy.isDead && player.isReady() && this.level6ContactCooldown <= 0) {
+          const whipReach = player.radius + 6.0;
+          const whipDir = vec2(Math.cos(this.integralWhipAngle), Math.sin(this.integralWhipAngle));
+          const whipTip = player.position.add(whipDir.scale(whipReach));
+
+          if (whipTip.distanceTo(enemy.position) <= enemy.radius + 1.5) {
+            // Whip strikes e^x directly!
+            player.cooldownMax = 5.0;
+            player.resetCooldown();
+            this.level6ContactCooldown = 0.6; // 600ms contact cooldown
+
+            this.eventBus.emit('SKILL_ACTIVATED', { entityId: player.id, skillName: '¡Látigo ∫!' });
+
+            enemy.takeDamage(7);
+            this.eventBus.emit('DAMAGE_DEALT', {
+              targetId: enemy.id,
+              amount: 7,
+              color: '#F57C00',
+              position: { x: enemy.position.x, y: enemy.position.y },
+            });
+
+            enemy.takeDamage(5);
+            this.eventBus.emit('DAMAGE_DEALT', {
+              targetId: enemy.id,
+              amount: 5,
+              color: '#F57C00',
+              position: { x: enemy.position.x, y: enemy.position.y - 4 },
+            });
+
+            this.integralConstantCount++;
+            const cIndex = this.integralConstantCount;
+            this.spawnConstantSphere(cIndex);
+
+            this.eventBus.emit('MATH_FORMULA', {
+              latex: `\\int e^x dx = e^x + C_{${cIndex}}`,
+              position: { x: whipTip.x, y: whipTip.y },
+              color: '#F57C00',
+            });
+
+            // Strong knockback: send e^x flying far away! ("la mande lejos")
+            const normal = enemy.position.sub(player.position);
+            const dist = normal.magnitude();
+            const dir = dist > 0.001 ? normal.scale(1 / dist) : vec2(1, 0);
+
+            enemy.velocity = dir.scale(55);
+            player.velocity = dir.scale(-25);
+          }
+        }
+      }
+
       this.updateAI(dt);
     }
 
@@ -402,6 +463,155 @@ export class SimulationEngine {
         ElasticSolver.resolveCollision(a, b);
         return;
       }
+    }
+
+    // Level 6: Integral ∫ vs e^x -> Dedicated physics collision resolution & rules
+    if (this.level.id === 6 && ((a === this.leftEntity && b === this.rightEntity) || (b === this.leftEntity && a === this.rightEntity))) {
+      if (this.status === 'VICTORY' || this.status === 'DEFEAT') {
+        ElasticSolver.resolveCollision(a, b);
+        return;
+      }
+
+      const player = this.leftEntity;
+      const enemy = this.rightEntity;
+      const collisionPos = a.position.add(b.position).scale(0.5);
+
+      const normal = enemy.position.sub(player.position);
+      const dist = normal.magnitude();
+      const dir = dist > 0.001 ? normal.scale(1 / dist) : vec2(1, 0);
+
+      // Enforce immediate positional separation (+2.0 safety buffer) so they never overlap or stick
+      const minDist = player.radius + enemy.radius;
+      const overlap = minDist - dist;
+      if (overlap > 0) {
+        player.position = player.position.sub(dir.scale(overlap * 0.5 + 2.0));
+        enemy.position = enemy.position.add(dir.scale(overlap * 0.5 + 2.0));
+      }
+
+      // If contact cooldown is active, bounce velocities only without spawning duplicate constants
+      if (this.level6ContactCooldown > 0) {
+        player.velocity = dir.scale(-28);
+        enemy.velocity = dir.scale(35);
+        return;
+      }
+
+      this.level6ContactCooldown = 0.6; // 600ms contact cooldown
+
+      if (this.status === 'COMBAT') {
+        this.integralConstantCount++;
+        const cIndex = this.integralConstantCount;
+        this.spawnConstantSphere(cIndex);
+
+        this.eventBus.emit('MATH_FORMULA', {
+          latex: `\\int e^x dx = e^x + C_{${cIndex}}`,
+          position: { x: collisionPos.x, y: collisionPos.y },
+          color: '#F57C00',
+        });
+
+        if (player.isReady()) {
+          // Whip strike: -12 HP (-7 and -5) and 5s cooldown
+          player.cooldownMax = 5.0;
+          player.resetCooldown();
+
+          this.eventBus.emit('SKILL_ACTIVATED', { entityId: player.id, skillName: '¡Látigo ∫!' });
+          enemy.takeDamage(7);
+          this.eventBus.emit('DAMAGE_DEALT', {
+            targetId: enemy.id,
+            amount: 7,
+            color: '#F57C00',
+            position: { x: enemy.position.x, y: enemy.position.y },
+          });
+          enemy.takeDamage(5);
+          this.eventBus.emit('DAMAGE_DEALT', {
+            targetId: enemy.id,
+            amount: 5,
+            color: '#F57C00',
+            position: { x: enemy.position.x, y: enemy.position.y - 4 },
+          });
+
+          // Strong knockback repulsion ("la mande lejos")
+          player.velocity = dir.scale(-28);
+          enemy.velocity = dir.scale(50);
+        } else {
+          // Clean elastic bounce
+          player.velocity = dir.scale(-28);
+          enemy.velocity = dir.scale(35);
+        }
+      }
+      return;
+    }
+
+    // Level 6: Integral ∫ vs Constant Sphere C_k (SUB_ENTITY)
+    if (this.level.id === 6 && ((a === this.leftEntity && b.team === 'SUB_ENTITY') || (b === this.leftEntity && a.team === 'SUB_ENTITY'))) {
+      const player = this.leftEntity;
+      const node = a === this.leftEntity ? b : a;
+      const collisionPos = player.position.add(node.position).scale(0.5);
+
+      node.velocity = vec2(0, 0); // Keep static
+
+      // Immediate positional separation from bumper (+2.0 safety buffer)
+      const delta = player.position.sub(node.position);
+      const dist = delta.magnitude();
+      const dir = dist > 0.001 ? delta.scale(1 / dist) : vec2(-1, 0);
+      const minDist = player.radius + node.radius;
+      const overlap = minDist - dist;
+      if (overlap > 0) {
+        player.position = player.position.add(dir.scale(overlap + 2.0));
+      }
+
+      // Pinball bumper bounce
+      const bounceSpeed = Math.max(30, player.velocity.magnitude());
+      player.velocity = dir.scale(bounceSpeed);
+
+      if (node.invulnerabilityTimer > 0) {
+        return;
+      }
+      node.invulnerabilityTimer = 0.35; // 350ms debounce
+
+      const k = node.polyDegree;
+      const nextDegree = k + 1;
+      node.polyDegree = nextDegree;
+      const cNum = node.cIndex || 1;
+
+      const factorials = [1, 1, 2, 6, 24, 120, 720, 5040];
+      const prevDenom = factorials[k] || 1;
+      const nextDenom = factorials[nextDegree] || (prevDenom * nextDegree);
+
+      const prevSymbol = k === 0 ? `C_${cNum}` : k === 1 ? `C_${cNum} x` : `\\frac{C_${cNum}}{${prevDenom}}x^${k}`;
+      const nextSymbol = nextDegree === 1 ? `C_${cNum} x` : `\\frac{C_${cNum}}{${nextDenom}}x^${nextDegree}`;
+      const nextName = nextDegree === 1 ? `C${cNum}x` : `C${cNum}x^${nextDegree}/${nextDenom}`;
+
+      node.symbol = nextSymbol;
+      node.name = nextName;
+      node.radius = Math.min(9, 4.5 + nextDegree * 0.7);
+
+      this.integralConstantCount++;
+      const nextC = this.integralConstantCount;
+      this.spawnConstantSphere(nextC);
+
+      // Fire Polynomic Beam passing through the node
+      this.laserIdCounter++;
+      const curveType: 'LINEAR' | 'PARABOLA' | 'CUBIC' =
+        nextDegree === 1 ? 'LINEAR' : nextDegree === 2 ? 'PARABOLA' : 'CUBIC';
+
+      this.addLaser({
+        id: `laser_${this.laserIdCounter}_poly_${node.id}`,
+        ownerId: node.id,
+        sourcePos: node.position.clone(),
+        curveType,
+        isTelegraph: false,
+        telegraphTime: 0,
+        durationRemaining: 0.9,
+        damage: 4,
+      });
+
+      const formulaLatex = `\\int ${prevSymbol} dx = ${nextSymbol} + C_{${nextC}}`;
+      this.eventBus.emit('MATH_FORMULA', {
+        latex: formulaLatex,
+        position: { x: collisionPos.x, y: collisionPos.y },
+        color: '#F57C00',
+      });
+      return;
     }
 
     // 1. Resolve elastic physics bounce first
@@ -602,99 +812,6 @@ export class SimulationEngine {
       return;
     }
 
-    // Level 6: Integral ∫ vs Constant Sphere C_k -> Upgrades polynomial degree & fires polynomic beam
-    if (this.level.id === 6 && player.symbol === '∫' && (enemy.team === 'SUB_ENTITY' || enemy.symbol.includes('C'))) {
-      enemy.velocity = vec2(0, 0); // Keep static
-      if (enemy.invulnerabilityTimer > 0) {
-        return;
-      }
-      enemy.invulnerabilityTimer = 0.2; // 200ms debounce
-
-      const k = enemy.polyDegree;
-      const nextDegree = k + 1;
-      enemy.polyDegree = nextDegree;
-      const cNum = enemy.cIndex || 1;
-
-      const factorials = [1, 1, 2, 6, 24, 120, 720, 5040];
-      const prevDenom = factorials[k] || 1;
-      const nextDenom = factorials[nextDegree] || (prevDenom * nextDegree);
-
-      const prevSymbol = k === 0 ? `C_${cNum}` : k === 1 ? `C_${cNum} x` : `\\frac{C_${cNum}}{${prevDenom}}x^${k}`;
-      const nextSymbol = nextDegree === 1 ? `C_${cNum} x` : `\\frac{C_${cNum}}{${nextDenom}}x^${nextDegree}`;
-      const nextName = nextDegree === 1 ? `C${cNum}x` : `C${cNum}x^${nextDegree}/${nextDenom}`;
-
-      enemy.symbol = nextSymbol;
-      enemy.name = nextName;
-      enemy.radius = Math.min(9, 4.5 + nextDegree * 0.7);
-
-      this.integralConstantCount++;
-      const nextC = this.integralConstantCount;
-      this.spawnConstantSphere(nextC);
-
-      // Fire Polynomic Beam passing through the node
-      this.laserIdCounter++;
-      const curveType: 'LINEAR' | 'PARABOLA' | 'CUBIC' =
-        nextDegree === 1 ? 'LINEAR' : nextDegree === 2 ? 'PARABOLA' : 'CUBIC';
-
-      this.addLaser({
-        id: `laser_${this.laserIdCounter}_poly_${enemy.id}`,
-        ownerId: enemy.id,
-        sourcePos: enemy.position.clone(),
-        curveType,
-        isTelegraph: false,
-        telegraphTime: 0,
-        durationRemaining: 0.6,
-        damage: 4,
-      });
-
-      const formulaLatex = `\\int ${prevSymbol} dx = ${nextSymbol} + C_{${nextC}}`;
-      this.eventBus.emit('MATH_FORMULA', {
-        latex: formulaLatex,
-        position: { x: collisionPos.x, y: collisionPos.y },
-        color: '#F57C00',
-      });
-      return; // 0 collision damage to player and node!
-    }
-
-    // Level 6: Integral ∫ vs e^x -> spawns constants Cn and executes whip strike if ready
-    if (this.level.id === 6 && player.symbol === '∫' && enemy.symbol === 'eˣ') {
-      this.integralConstantCount++;
-      const cIndex = this.integralConstantCount;
-      this.spawnConstantSphere(cIndex);
-
-      this.eventBus.emit('MATH_FORMULA', {
-        latex: `\\int e^x dx = e^x + C_{${cIndex}}`,
-        position: { x: collisionPos.x, y: collisionPos.y },
-        color: '#F57C00',
-      });
-
-      if (player.isReady()) {
-        // Whip is ready! Strike e^x for -7 and -5 (total -12 HP) and put whip on 5s cooldown
-        player.cooldownMax = 5.0;
-        player.resetCooldown();
-
-        this.eventBus.emit('SKILL_ACTIVATED', { entityId: player.id, skillName: '¡Látigo ∫!' });
-
-        enemy.takeDamage(7);
-        this.eventBus.emit('DAMAGE_DEALT', {
-          targetId: enemy.id,
-          amount: 7,
-          color: '#F57C00',
-          position: { x: enemy.position.x, y: enemy.position.y },
-        });
-
-        enemy.takeDamage(5);
-        this.eventBus.emit('DAMAGE_DEALT', {
-          targetId: enemy.id,
-          amount: 5,
-          color: '#F57C00',
-          position: { x: enemy.position.x, y: enemy.position.y - 4 },
-        });
-      }
-
-      return; // 0 collision recoil damage to player!
-    }
-
     // Level 8 & 9: Pi orbital digit contact
     if (this.level.id === 8 || this.level.id === 9 || player.symbol === 'π' || enemy.symbol === 'π') {
       const piEntity = player.symbol === 'π' ? player : enemy;
@@ -876,14 +993,32 @@ export class SimulationEngine {
   private spawnConstantSphere(index: number, forcedPos?: Vector2D): BaseEntity {
     let pos = forcedPos;
     if (!pos) {
-      // Spawn at a random position across the arena with safe clearance from player (>= 12 units)
-      pos = vec2((Math.random() - 0.5) * 70, (Math.random() - 0.5) * 50);
-      for (let attempts = 0; attempts < 15; attempts++) {
-        if (pos.distanceTo(this.leftEntity.position) >= 12) {
+      // Find a safe spot with ample clearance from both Player (>= 22 units) and Enemy (>= 20 units)
+      let bestPos = vec2((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 50);
+      let bestDist = 0;
+
+      for (let attempts = 0; attempts < 35; attempts++) {
+        const candidate = vec2((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 50);
+        const distPlayer = candidate.distanceTo(this.leftEntity.position);
+        const distEnemy = candidate.distanceTo(this.rightEntity.position);
+        const minDist = Math.min(distPlayer, distEnemy);
+
+        // Check distance to existing sub-entities so they don't pile directly on each other
+        const distToNodes = this.subEntities.length > 0
+          ? Math.min(...this.subEntities.map((s) => candidate.distanceTo(s.position)))
+          : 999;
+
+        if (distPlayer >= 22 && distEnemy >= 20 && distToNodes >= 8) {
+          bestPos = candidate;
           break;
         }
-        pos = vec2((Math.random() - 0.5) * 70, (Math.random() - 0.5) * 50);
+
+        if (minDist > bestDist) {
+          bestDist = minDist;
+          bestPos = candidate;
+        }
       }
+      pos = bestPos;
     }
 
     const sub = new BaseEntity({
@@ -907,6 +1042,14 @@ export class SimulationEngine {
   }
 
   private updateLevelMechanics(dt: number): void {
+    // Level 6: Integral whip rotation and contact cooldown
+    if (this.level.id === 6) {
+      this.integralWhipAngle = (this.integralWhipAngle + dt * 3.5) % (Math.PI * 2);
+      if (this.level6ContactCooldown > 0) {
+        this.level6ContactCooldown -= dt;
+      }
+    }
+
     // Level 3 & 9: Imaginary unit phase rotation
     if (this.level.id === 3 || this.level.id === 9) {
       const imag = this.level.id === 3
@@ -945,7 +1088,7 @@ export class SimulationEngine {
         if (this.level.id === 3 && laser.ownerId === this.leftEntity.id) {
           laser.sourcePos = this.leftEntity.position.clone();
         }
-        if (this.level.id === 4 && laser.ownerId === this.rightEntity.id) {
+        if ((this.level.id === 4 || this.level.id === 6) && laser.ownerId === this.rightEntity.id) {
           laser.sourcePos = this.rightEntity.position.clone();
         }
         if (laser.telegraphTime <= 0) {

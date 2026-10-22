@@ -254,11 +254,12 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
         } else {
           // Polynomial curves (Cubic, Parabola, Linear)
           ctx.beginPath();
-          ctx.strokeStyle = laser.isTelegraph ? 'rgba(244, 81, 30, 0.4)' : '#F4511E';
+          const laserColor = isDark ? '#FF9100' : '#F57C00';
+          ctx.strokeStyle = laser.isTelegraph ? 'rgba(245, 124, 0, 0.4)' : laserColor;
           ctx.lineWidth = laser.isTelegraph ? 2 : 4;
           if (!laser.isTelegraph) {
-            ctx.shadowColor = '#F4511E';
-            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#FFB300';
+            ctx.shadowBlur = 12;
           }
 
           if (laser.curveType === 'CUBIC') {
@@ -487,34 +488,39 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
 
       // Apéndice / Cola ("Látigo ∫") for Integral (∫)
       if (entity.symbol === '∫') {
-        const orbitAngle = Date.now() * 0.0035;
+        const orbitAngle = engine.integralWhipAngle !== undefined ? engine.integralWhipAngle : Date.now() * 0.0035;
         const isReady = entity.isReady();
-        const whipLen = r + 15;
-        const tipX = p.x + whipLen * Math.cos(orbitAngle);
-        const tipY = p.y + whipLen * Math.sin(orbitAngle);
+        const whipScreenLen = (entity.radius + 6.0) * (width / 100);
+        const cosA = Math.cos(orbitAngle);
+        const sinA = Math.sin(orbitAngle);
+        // Note: Cartesian Y is positive UP, whereas screen canvas Y is positive DOWN
+        const tipX = p.x + whipScreenLen * cosA;
+        const tipY = p.y - whipScreenLen * sinA;
+        const startX = p.x + r * cosA;
+        const startY = p.y - r * sinA;
 
         ctx.save();
         ctx.beginPath();
         ctx.strokeStyle = isReady ? '#FFA000' : 'rgba(251, 140, 0, 0.45)';
-        ctx.lineWidth = isReady ? 3.5 : 2;
+        ctx.lineWidth = isReady ? 4 : 2;
         if (isReady) {
           ctx.shadowColor = '#FFB300';
-          ctx.shadowBlur = 8;
+          ctx.shadowBlur = 12;
         }
-        ctx.moveTo(p.x + r * Math.cos(orbitAngle), p.y + r * Math.sin(orbitAngle));
+        ctx.moveTo(startX, startY);
         ctx.lineTo(tipX, tipY);
         ctx.stroke();
 
         // Tip hook
         ctx.beginPath();
-        ctx.arc(tipX, tipY, 4, orbitAngle - Math.PI / 2, orbitAngle + Math.PI / 2);
+        ctx.arc(tipX, tipY, 6, -orbitAngle - Math.PI / 2, -orbitAngle + Math.PI / 2);
         ctx.stroke();
 
-        ctx.font = 'bold 14px serif';
+        ctx.font = 'bold 15px serif';
         ctx.fillStyle = isReady ? '#FFD54F' : '#FFA000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('∫', tipX + 4 * Math.cos(orbitAngle), tipY + 4 * Math.sin(orbitAngle));
+        ctx.fillText('∫', tipX + 5 * cosA, tipY - 5 * sinA);
         ctx.restore();
       }
 

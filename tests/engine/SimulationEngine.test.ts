@@ -1326,6 +1326,12 @@ describe('SimulationEngine', () => {
       engine.update(3.1); // Enter combat
       expect(engine.rightEntity.hp).toBe(80);
 
+      // Keep entities separated while waiting for whip cooldown
+      engine.leftEntity.position = vec2(-35, 0);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.position = vec2(35, 0);
+      engine.rightEntity.velocity = vec2(0, 0);
+
       // Wait until whip is ready (1s initial cooldown)
       engine.update(1.0);
       expect(engine.leftEntity.isReady()).toBe(true);
@@ -1444,6 +1450,48 @@ describe('SimulationEngine', () => {
       expect(c1.hp).toBe(0);
       expect(c1.isDead).toBe(true);
       expect(engine.subEntities.length).toBe(0);
+    });
+
+    it('Test 5: Prevention of Sticking, Strong Repulsion, and Debounce between ∫ and e^x', () => {
+      const level6 = LevelRegistry.getLevel(6)!;
+      const engine = new SimulationEngine(level6);
+
+      engine.update(3.1); // Enter combat
+      expect(engine.subEntities.length).toBe(0);
+
+      // Place ∫ and e^x colliding directly at the center
+      engine.leftEntity.position = vec2(-5, 0);
+      engine.leftEntity.velocity = vec2(20, 0);
+      engine.rightEntity.position = vec2(5, 0);
+      engine.rightEntity.velocity = vec2(-20, 0);
+
+      // Frame 1: First collision occurs
+      engine.update(1 / 60);
+
+      // Exactly ONE constant is generated (C1)
+      expect(engine.integralConstantCount).toBe(1);
+      expect(engine.subEntities.length).toBe(1);
+
+      // Repulsion velocities: player sent left, enemy sent right with strong knockback ("la mande lejos")
+      expect(engine.leftEntity.velocity.x).toBeLessThan(0);
+      expect(engine.rightEntity.velocity.x).toBeGreaterThan(30);
+
+      // Positional separation prevents geometrical sticking
+      const dist = engine.leftEntity.position.distanceTo(engine.rightEntity.position);
+      const minDist = engine.leftEntity.radius + engine.rightEntity.radius;
+      expect(dist).toBeGreaterThanOrEqual(minDist);
+
+      // Simulate 15 consecutive frames (~0.25s) without external forces
+      for (let f = 0; f < 15; f++) {
+        engine.update(1 / 60);
+      }
+
+      // Crucial: No runaway multiplication! Constant count remains strictly 1
+      expect(engine.integralConstantCount).toBe(1);
+      expect(engine.subEntities.length).toBe(1);
+
+      // Contact cooldown is active during separation
+      expect(engine.level6ContactCooldown).toBeGreaterThan(0);
     });
   });
 });
