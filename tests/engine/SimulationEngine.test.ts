@@ -1493,5 +1493,102 @@ describe('SimulationEngine', () => {
       // Contact cooldown is active during separation
       expect(engine.level6ContactCooldown).toBeGreaterThan(0);
     });
+
+    it('Test 6: Constant Spheres Motion, Freezing on Beam, Interruption by Blade, and Level Victory on e^x Death', () => {
+      const level6 = LevelRegistry.getLevel(6)!;
+      let matchOverEmitted = false;
+      let matchWinner = '';
+      const testBus = new EventBus();
+      testBus.on('MATCH_OVER', (payload) => {
+        matchOverEmitted = true;
+        matchWinner = payload.winner;
+      });
+
+      const engine = new SimulationEngine(level6, testBus);
+      engine.update(3.1); // Enter combat
+
+      // 1. Spawn a constant sphere and verify it has motion
+      engine.leftEntity.position = vec2(-30, -30);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.position = vec2(30, 30);
+      engine.rightEntity.velocity = vec2(0, 0);
+
+      // Trigger one hit between ∫ and e^x to spawn a constant C1
+      engine.leftEntity.position = engine.rightEntity.position.clone();
+      engine.update(1 / 60);
+
+      expect(engine.subEntities.length).toBe(1);
+      const c1 = engine.subEntities[0];
+
+      // Constant sphere has non-zero velocity and is NOT frozen initially
+      expect(c1.velocity.magnitude()).toBeGreaterThan(10);
+      const initialPos = c1.position.clone();
+
+      // Separate ∫ and e^x
+      engine.leftEntity.position = vec2(-40, -40);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.position = vec2(40, 40);
+      engine.rightEntity.velocity = vec2(0, 0);
+
+      // Advance 5 frames: verify C1 actually moves
+      for (let f = 0; f < 5; f++) {
+        engine.update(1 / 60);
+      }
+      expect(c1.position.distanceTo(initialPos)).toBeGreaterThan(0.5);
+
+      // 2. Player integrates C1 -> C1 must freeze while firing its polynomial ray
+      c1.invulnerabilityTimer = 0;
+      engine.leftEntity.position = c1.position.clone();
+      engine.update(1 / 60);
+
+      expect(c1.polyDegree).toBe(1); // upgraded to C1 x
+      expect(engine.activeLasers.some((l) => l.ownerId === c1.id)).toBe(true);
+
+      const frozenPos = c1.position.clone();
+      // Advance 1 frame: since C1 is firing a ray, it must remain frozen in place
+      engine.update(1 / 60);
+      expect(c1.position.x).toBeCloseTo(frozenPos.x, 2);
+      expect(c1.position.y).toBeCloseTo(frozenPos.y, 2);
+
+      // 3. Enemy e^x cuts C1 with Exponential Blade while firing ray -> ray interrupts, C1 unfreezes and continues moving
+      engine.activeLasers.push({
+        id: 'blade_interrupt',
+        ownerId: engine.rightEntity.id,
+        sourcePos: vec2(c1.position.x, c1.position.y - 1),
+        curveType: 'EXPONENTIAL',
+        isTelegraph: false,
+        telegraphTime: 0,
+        durationRemaining: 0.5,
+        damage: 4,
+      });
+
+      engine.update(1 / 60);
+
+      // The ray owned by C1 was interrupted and removed!
+      expect(engine.activeLasers.some((l) => l.ownerId === c1.id)).toBe(false);
+      // C1 received -1 HP
+      expect(c1.hp).toBe(1);
+
+      // Advance frames: C1 continues moving forward
+      const posAfterInterrupt = c1.position.clone();
+      for (let f = 0; f < 5; f++) {
+        engine.update(1 / 60);
+      }
+      expect(c1.position.distanceTo(posAfterInterrupt)).toBeGreaterThan(0.5);
+
+      // 4. Enemy e^x reaches 0 HP -> Level transitions to VICTORY even with active constants
+      expect(engine.status).toBe('COMBAT');
+      expect(engine.subEntities.length).toBeGreaterThan(0);
+
+      engine.rightEntity.takeDamage(engine.rightEntity.hp); // lethal damage
+      expect(engine.rightEntity.hp).toBe(0);
+      expect(engine.rightEntity.isDead).toBe(true);
+
+      engine.update(1 / 60); // triggers checkMatchEnd
+
+      expect(engine.status).toBe('VICTORY');
+      expect(matchOverEmitted).toBe(true);
+      expect(matchWinner).toBe('LEFT');
+    });
   });
 });

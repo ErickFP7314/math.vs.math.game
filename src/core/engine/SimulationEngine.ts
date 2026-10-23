@@ -547,21 +547,19 @@ export class SimulationEngine {
       const node = a === this.leftEntity ? b : a;
       const collisionPos = player.position.add(node.position).scale(0.5);
 
-      node.velocity = vec2(0, 0); // Keep static
-
-      // Immediate positional separation from bumper (+2.0 safety buffer)
+      // Immediate positional separation (+1.5 safety buffer)
       const delta = player.position.sub(node.position);
       const dist = delta.magnitude();
       const dir = dist > 0.001 ? delta.scale(1 / dist) : vec2(-1, 0);
       const minDist = player.radius + node.radius;
       const overlap = minDist - dist;
       if (overlap > 0) {
-        player.position = player.position.add(dir.scale(overlap + 2.0));
+        player.position = player.position.add(dir.scale(overlap + 1.5));
       }
 
-      // Pinball bumper bounce
-      const bounceSpeed = Math.max(30, player.velocity.magnitude());
-      player.velocity = dir.scale(bounceSpeed);
+      // Strong bounce velocities away from each other
+      player.velocity = dir.scale(Math.max(25, player.velocity.magnitude()));
+      node.velocity = dir.scale(-Math.max(20, node.velocity.magnitude() || 20));
 
       if (node.invulnerabilityTimer > 0) {
         return;
@@ -1021,6 +1019,10 @@ export class SimulationEngine {
       pos = bestPos;
     }
 
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 18 + Math.random() * 6; // initial drift speed 18-24
+    const initialVel = vec2(Math.cos(angle) * speed, Math.sin(angle) * speed);
+
     const sub = new BaseEntity({
       id: `const_C_${index}_${Date.now()}_${Math.random()}`,
       name: `C${index}`,
@@ -1031,9 +1033,9 @@ export class SimulationEngine {
       hp: 2,
       maxHp: 2,
       radius: 4.5,
-      mass: 1e9,
+      mass: 1.0,
       position: pos,
-      velocity: vec2(0, 0),
+      velocity: initialVel,
     });
     sub.cIndex = index;
     sub.polyDegree = 0;
@@ -1112,7 +1114,7 @@ export class SimulationEngine {
             ];
 
         for (const target of targets) {
-          if (target.isInvulnerable()) {
+          if (target.isInvulnerable() && !(this.level.id === 6 && target.team === 'SUB_ENTITY')) {
             continue;
           }
           if (!laser.hitEntityIds) {
@@ -1205,6 +1207,14 @@ export class SimulationEngine {
 
             // Level 6 node damage from e^x Exponential Blade
             if (this.level.id === 6 && target.team === 'SUB_ENTITY') {
+              // If node was firing a ray, interrupt and stop the ray ("ahi el rayo debe detenerse")
+              const hadActiveLaser = this.activeLasers.some((l) => l.ownerId === target.id);
+              if (hadActiveLaser) {
+                this.activeLasers = this.activeLasers.filter((l) => l.ownerId !== target.id);
+                this.frozenOwnerIds.delete(target.id);
+                this.recalcFrozenOwners();
+              }
+
               target.hp = Math.max(0, target.hp - 1);
               this.eventBus.emit('DAMAGE_DEALT', {
                 targetId: target.id,
@@ -1219,6 +1229,12 @@ export class SimulationEngine {
                   position: { x: target.position.x, y: target.position.y },
                   color: '#F57C00',
                 });
+              } else {
+                // Node was sliced but survived: ensure it keeps advancing ("la esfera debe seguir avanzando")
+                if (target.velocity.magnitude() < 12) {
+                  const angle = Math.random() * Math.PI * 2;
+                  target.velocity = vec2(Math.cos(angle) * 20, Math.sin(angle) * 20);
+                }
               }
               continue;
             }
@@ -1397,6 +1413,10 @@ export class SimulationEngine {
   private addLaser(laser: ActiveLaser): void {
     this.activeLasers.push(laser);
     if (this.level.id !== 3 && this.level.id !== 4 && this.level.id !== 5 && this.level.id !== 6) {
+      this.frozenOwnerIds.add(laser.ownerId);
+    }
+    // In Level 6, constant nodes freeze when firing their polynomial beam!
+    if (this.level.id === 6 && this.subEntities.some((s) => s.id === laser.ownerId)) {
       this.frozenOwnerIds.add(laser.ownerId);
     }
     if (!laser.isTelegraph) {
@@ -1680,8 +1700,10 @@ export class SimulationEngine {
       return;
     }
 
-    // Check living sub-entities on the right side
-    const livingRightSubEntities = this.subEntities.filter((e) => !e.isDead && e.team === 'SUB_ENTITY');
+    // In Level 6, subEntities are player-generated constants (allies), NOT enemy minions!
+    const livingRightSubEntities = this.level.id === 6
+      ? []
+      : this.subEntities.filter((e) => !e.isDead && e.team === 'SUB_ENTITY');
 
     if (this.leftEntity.isDead && (!this.rightEntity.isDead || livingRightSubEntities.length > 0)) {
       this.status = 'DEFEAT';
@@ -1726,6 +1748,10 @@ export class SimulationEngine {
     this.frozenOwnerIds.clear();
     for (const laser of this.activeLasers) {
       if (this.level.id !== 3 && this.level.id !== 4 && this.level.id !== 5 && this.level.id !== 6) {
+        this.frozenOwnerIds.add(laser.ownerId);
+      }
+      // In Level 6, constant nodes freeze when firing their polynomial beam!
+      if (this.level.id === 6 && this.subEntities.some((s) => s.id === laser.ownerId)) {
         this.frozenOwnerIds.add(laser.ownerId);
       }
     }

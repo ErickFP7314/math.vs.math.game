@@ -302,9 +302,12 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
       }
 
       // 6. Draw Entities
-      const entities = [engine.leftEntity, engine.rightEntity, ...engine.subEntities].filter(
-        (e) => !e.isDead
-      );
+      // Keep main fighters (leftEntity and rightEntity) visible even if defeated so the defeated sphere does not vanish abruptly
+      const entities = [
+        engine.leftEntity,
+        engine.rightEntity,
+        ...engine.subEntities.filter((e) => !e.isDead),
+      ];
 
       for (const entity of entities) {
         drawEntity(ctx, entity, width, height);
@@ -410,6 +413,9 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
       }
 
       ctx.save();
+      if (entity.isDead) {
+        ctx.globalAlpha = 0.45;
+      }
 
       // Shield or Hexagon for e^x immunity
       if (entity.isImmuneToDerivative) {
