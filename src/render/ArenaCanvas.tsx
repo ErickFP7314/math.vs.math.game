@@ -19,6 +19,16 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
   const cursorGamePosRef = useRef<Vector2D | null>(null);
   const shockwavesRef = useRef<{ x: number; y: number; radius: number; alpha: number }[]>([]);
   const screenShakeRef = useRef(0);
+  const particlesRef = useRef<{
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    radius: number;
+    color: string;
+    alpha: number;
+    decay: number;
+  }[]>([]);
 
   // Convert game coordinates [-50..50, -50..50] to 1:1 square canvas pixels
   const toScreen = (gamePos: Vector2D, width: number, height: number): { x: number; y: number } => {
@@ -43,6 +53,31 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
     const unsubDamage = globalEventBus.on('DAMAGE_DEALT', (payload) => {
       if (payload.targetId === engine.leftEntity.id) {
         screenShakeRef.current = 7;
+      }
+
+      // Lightweight damage particle burst across all levels
+      const screenPos = toScreen(vec2(payload.position.x, payload.position.y), canvas.width, canvas.height);
+      const count = 8 + Math.floor(Math.random() * 5); // 8-12 particles
+      const baseColor = payload.color || '#FF5722';
+
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 40 + Math.random() * 80; // Fast initial burst
+        particlesRef.current.push({
+          x: screenPos.x,
+          y: screenPos.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: 1.5 + Math.random() * 1.5,
+          color: baseColor,
+          alpha: 1.0,
+          decay: 0.05 + Math.random() * 0.03, // Fades completely in ~15-20 frames (~0.25-0.33s)
+        });
+      }
+
+      // Hard cap to prevent any lag even during rapid multi-hits
+      if (particlesRef.current.length > 50) {
+        particlesRef.current.splice(0, particlesRef.current.length - 50);
       }
     });
 
@@ -238,19 +273,66 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
           ctx.fill();
           ctx.stroke();
         } else if (laser.curveType === 'SINE' || laser.curveType === 'COSINE') {
-          // Wave beam
-          ctx.beginPath();
-          ctx.strokeStyle = laser.curveType === 'SINE' ? '#3F51B5' : '#D500F9';
-          ctx.lineWidth = 3;
-          ctx.shadowColor = ctx.strokeStyle;
-          ctx.shadowBlur = 8;
-          for (let step = 0; step < 80; step += 2) {
-            const waveY = p.y + (laser.curveType === 'COSINE' ? Math.cos(step * 0.2) * 12 : Math.sin(step * 0.2) * 12);
-            const waveX = p.x + (laser.ownerId === engine.leftEntity.id ? step * 3 : -step * 3);
-            if (step === 0) ctx.moveTo(waveX, waveY);
-            else ctx.lineTo(waveX, waveY);
+          const strokeColor = laser.curveType === 'SINE' ? '#3F51B5' : '#D500F9';
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = 3.5;
+          ctx.shadowColor = strokeColor;
+          ctx.shadowBlur = 10;
+
+          if (laser.velocity && laser.velocity.magnitude() > 0.01) {
+            // Directional traveling sinusoidal wave packet
+            const speed = laser.velocity.magnitude();
+            const dirX = laser.velocity.x / speed;
+            const dirY = laser.velocity.y / speed;
+            // Screen space inversion (game +Y is UP, screen +Y is DOWN)
+            const screenDirX = dirX;
+            const screenDirY = -dirY;
+            const screenNormX = -screenDirY;
+            const screenNormY = screenDirX;
+
+            const packetLengthPx = 24 * (width / 100);
+            const halfLen = packetLengthPx / 2;
+            const numSteps = 32;
+            const freq = laser.frequency || 1;
+            const k = freq * 0.25;
+            const animPhase = laser.durationRemaining ? (5.0 - laser.durationRemaining) * 18 : 0;
+            const amp = Math.abs(laser.amplitude || 1) * 3.5 * (width / 100);
+
+            ctx.beginPath();
+            for (let i = 0; i <= numSteps; i++) {
+              const s = -halfLen + (i / numSteps) * (2 * halfLen);
+              const normS = s / halfLen;
+              const envelope = Math.max(0, 1 - normS * normS);
+              const waveAngle = s * k + animPhase;
+              const osc = laser.curveType === 'COSINE' ? Math.cos(waveAngle) : Math.sin(waveAngle);
+              const disp = osc * envelope * amp;
+              const sx = p.x + screenDirX * s + screenNormX * disp;
+              const sy = p.y + screenDirY * s + screenNormY * disp;
+              if (i === 0) ctx.moveTo(sx, sy);
+              else ctx.lineTo(sx, sy);
+            }
+            ctx.stroke();
+
+            // Leading crest head of the traveling wave
+            const headX = p.x + screenDirX * halfLen;
+            const headY = p.y + screenDirY * halfLen;
+            ctx.beginPath();
+            ctx.arc(headX, headY, 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = laser.curveType === 'SINE' ? '#81D4FA' : '#F48FB1';
+            ctx.shadowColor = ctx.fillStyle;
+            ctx.shadowBlur = 8;
+            ctx.fill();
+          } else {
+            // Static wave beam fallback
+            ctx.beginPath();
+            for (let step = 0; step < 80; step += 2) {
+              const waveY = p.y + (laser.curveType === 'COSINE' ? Math.cos(step * 0.2) * 12 : Math.sin(step * 0.2) * 12);
+              const waveX = p.x + (laser.ownerId === engine.leftEntity.id ? step * 3 : -step * 3);
+              if (step === 0) ctx.moveTo(waveX, waveY);
+              else ctx.lineTo(waveX, waveY);
+            }
+            ctx.stroke();
           }
-          ctx.stroke();
         } else {
           // Polynomial curves (Cubic, Parabola, Linear)
           ctx.beginPath();
@@ -360,6 +442,31 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
         ctx.beginPath();
         ctx.arc(curr.x, curr.y, 4, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
+      }
+
+      // 8.5. Draw and update damage particles (instantaneous lightweight burst)
+      if (particlesRef.current.length > 0) {
+        ctx.save();
+        for (let pIdx = particlesRef.current.length - 1; pIdx >= 0; pIdx--) {
+          const pt = particlesRef.current[pIdx];
+          pt.x += pt.vx * (1 / 60);
+          pt.y += pt.vy * (1 / 60);
+          pt.vx *= 0.92; // Drag
+          pt.vy *= 0.92;
+          pt.alpha -= pt.decay;
+
+          if (pt.alpha <= 0) {
+            particlesRef.current.splice(pIdx, 1);
+            continue;
+          }
+
+          ctx.globalAlpha = Math.max(0, Math.min(1, pt.alpha));
+          ctx.fillStyle = pt.color;
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, pt.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
         ctx.restore();
       }
 

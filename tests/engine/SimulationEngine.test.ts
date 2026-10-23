@@ -1198,6 +1198,65 @@ describe('SimulationEngine', () => {
       // Player took 0 damage on dodge
       expect(engine.leftEntity.hp).toBe(75);
     });
+
+    it('Test 6: Directional traveling wave projectile lifecycle and boundary wall dissolution', () => {
+      const level5 = LevelRegistry.getLevel(5)!;
+      const testBus = new EventBus();
+      const engine = new SimulationEngine(level5, testBus);
+
+      engine.update(3.1); // Combat
+
+      // Position enemy at (30, 0) and player at (-10, 0)
+      engine.rightEntity.position = vec2(30, 0);
+      engine.rightEntity.velocity = vec2(0, 0);
+      engine.leftEntity.position = vec2(-10, 0);
+      engine.leftEntity.velocity = vec2(0, 0);
+
+      // Force enemy cooldown to ready so wave fires
+      engine.rightEntity.cooldownRemaining = 0;
+      engine.update(1 / 60);
+
+      // Verify wave was spawned and is aimed directly toward the player
+      expect(engine.activeLasers.length).toBe(1);
+      const wave = engine.activeLasers[0];
+      expect(wave.velocity).toBeDefined();
+      expect(wave.velocity!.x).toBeLessThan(0); // Aimed left toward player
+      expect(Math.abs(wave.velocity!.y)).toBeLessThan(0.01);
+
+      // Advance wave along path until it reaches player at x = -10
+      // Distance from 30 to -10 is 40 units; at speed 40 units/s, travel time is ~1.0s
+      let formulaEmitted = false;
+      testBus.on('MATH_FORMULA', (payload) => {
+        if (payload.latex.includes('(-25)')) {
+          formulaEmitted = true;
+        }
+      });
+
+      // Update 0.8s: wave approaches player and hits
+      engine.update(0.8);
+      expect(engine.leftEntity.hp).toBe(75); // -25 HP dealt!
+      expect(formulaEmitted).toBe(true);
+
+      // Wave continues traveling past the player (does not deal damage again to the same target)
+      engine.update(0.1);
+      expect(engine.leftEntity.hp).toBe(75);
+
+      // Listen for boundary wall dissolution formula
+      let wallDissolved = false;
+      testBus.on('MATH_FORMULA', (payload) => {
+        if (payload.latex.includes('Disipación')) {
+          wallDissolved = true;
+        }
+      });
+
+      // Advance until wave reaches boundary wall (x <= -50)
+      // At x = -10, distance to -50 is 40 units, ~1.0s at speed 40
+      engine.update(1.2);
+
+      // Wave collided with boundary wall and dissolved
+      expect(wallDissolved).toBe(true);
+      expect(engine.activeLasers.length).toBe(0);
+    });
   });
 
   describe('Level 6 (reglas2/nivel6.md) Specifications', () => {

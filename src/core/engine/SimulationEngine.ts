@@ -19,6 +19,9 @@ export interface ActiveLaser {
   angle?: number;
   sectorSpan?: number;
   hitEntityIds?: string[];
+  velocity?: Vector2D;
+  amplitude?: number;
+  frequency?: number;
 }
 
 export interface PowerOrb {
@@ -309,6 +312,18 @@ export class SimulationEngine {
           this.laserIdCounter++;
           const isCos = this.rightEntity.symbol.includes('cos');
           const skillName = isCos ? '¡Onda Coseno!' : '¡Onda Seno!';
+
+          const target = this.leftEntity;
+          let dir = target.position.sub(this.rightEntity.position);
+          if (dir.magnitude() > 0.001) {
+            dir = dir.normalize();
+          } else {
+            dir = vec2(-1, 0);
+          }
+          const speed = 40;
+          const amp = Math.abs(this.rightEntity.amplitude || 1);
+          const freq = this.rightEntity.frequency || 1;
+
           this.addLaser({
             id: `laser_${this.laserIdCounter}_enemy_wave`,
             ownerId: this.rightEntity.id,
@@ -316,8 +331,12 @@ export class SimulationEngine {
             curveType: isCos ? 'COSINE' : 'SINE',
             isTelegraph: false,
             telegraphTime: 0,
-            durationRemaining: 0.8,
+            durationRemaining: 5.0,
             damage: 25,
+            velocity: dir.scale(speed),
+            angle: Math.atan2(dir.y, dir.x),
+            amplitude: amp,
+            frequency: freq,
           });
           this.eventBus.emit('SKILL_ACTIVATED', { entityId: this.rightEntity.id, skillName });
         }
@@ -1104,6 +1123,27 @@ export class SimulationEngine {
       } else {
         laser.durationRemaining -= dt;
 
+        // Advance moving projectile waves (Level 5 directional wave)
+        if (laser.velocity) {
+          laser.sourcePos = laser.sourcePos.add(laser.velocity.scale(dt));
+
+          // Boundary check: wave collides with arena perimeter walls and dissolves
+          const bounds = this.level.arenaBounds;
+          if (
+            laser.sourcePos.x <= bounds.minX ||
+            laser.sourcePos.x >= bounds.maxX ||
+            laser.sourcePos.y <= bounds.minY ||
+            laser.sourcePos.y >= bounds.maxY
+          ) {
+            laser.durationRemaining = 0;
+            this.eventBus.emit('MATH_FORMULA', {
+              latex: '\\sim \\text{[Disipación]}',
+              position: { x: laser.sourcePos.x, y: laser.sourcePos.y },
+              color: laser.curveType === 'SINE' ? '#3F51B5' : '#D500F9',
+            });
+          }
+        }
+
         // Damage detection against opposing entities
         const isPlayerLaser = laser.ownerId === this.leftEntity.id || (this.level.id === 6 && this.subEntities.some((s) => s.id === laser.ownerId));
         const targets = isPlayerLaser
@@ -1143,10 +1183,36 @@ export class SimulationEngine {
             hit = Curves.intersectsDiagonalLine(target.position, target.radius, laser.sourcePos, -50, 50);
           } else if (laser.curveType === 'HORIZONTAL') {
             hit = Curves.intersectsHorizontalLine(target.position, target.radius, laser.sourcePos.y, -50, 50);
-          } else if (laser.curveType === 'SINE') {
-            hit = Curves.intersectsSine(target.position, target.radius, laser.sourcePos, -50, 50);
-          } else if (laser.curveType === 'COSINE') {
-            hit = Curves.intersectsCosine(target.position, target.radius, laser.sourcePos, -50, 50);
+          } else if (laser.curveType === 'SINE' || laser.curveType === 'COSINE') {
+            if (laser.velocity) {
+              const speed = laser.velocity.magnitude();
+              if (speed > 0.001) {
+                const dir = laser.velocity.scale(1 / speed);
+                const halfLen = 12.0;
+                const front = laser.sourcePos.add(dir.scale(halfLen));
+                const back = laser.sourcePos.sub(dir.scale(halfLen));
+                const seg = front.sub(back);
+                const segLenSq = 24.0 * 24.0;
+                const v = target.position.sub(back);
+                const proj = (v.x * seg.x + v.y * seg.y) / segLenSq;
+                const tClamped = Math.max(0, Math.min(1, proj));
+                const closestPoint = back.add(seg.scale(tClamped));
+                const distToAxis = target.position.distanceTo(closestPoint);
+
+                const normS = (tClamped - 0.5) * 2;
+                const envelope = Math.max(0, 1 - normS * normS);
+                const effectiveAmp = Math.abs(laser.amplitude || 1) * 3.5 * envelope;
+                const hitRadius = target.radius + Math.max(2.0, effectiveAmp);
+
+                hit = distToAxis <= hitRadius;
+              } else {
+                hit = target.position.distanceTo(laser.sourcePos) <= target.radius + Math.abs(laser.amplitude || 1) * 3.5 + 2.0;
+              }
+            } else {
+              hit = laser.curveType === 'SINE'
+                ? Curves.intersectsSine(target.position, target.radius, laser.sourcePos, -50, 50)
+                : Curves.intersectsCosine(target.position, target.radius, laser.sourcePos, -50, 50);
+            }
           }
 
           if (hit) {
@@ -1280,6 +1346,23 @@ export class SimulationEngine {
                 tickTimer: 0,
               });
 
+              continue;
+            }
+
+            // Level 5 specific wave projectile damage vs player
+            if (this.level.id === 5 && target.id === this.leftEntity.id) {
+              target.takeDamage(laser.damage);
+              this.eventBus.emit('DAMAGE_DEALT', {
+                targetId: target.id,
+                amount: laser.damage,
+                color: '#D32F2F',
+                position: { x: target.position.x, y: target.position.y },
+              });
+              this.eventBus.emit('MATH_FORMULA', {
+                latex: `${laser.curveType === 'COSINE' ? '\\cos x' : '\\sin x'} \\text{ (-${laser.damage})}`,
+                position: { x: target.position.x, y: target.position.y },
+                color: '#D32F2F',
+              });
               continue;
             }
 
@@ -1600,6 +1683,19 @@ export class SimulationEngine {
       const isCos = entity.symbol.includes('cos');
       const skillName = isCos ? '¡Onda Coseno!' : '¡Onda Seno!';
       this.eventBus.emit('SKILL_ACTIVATED', { entityId: entity.id, skillName });
+
+      const target = entity.id === this.leftEntity.id ? this.rightEntity : this.leftEntity;
+      let dir = target.position.sub(entity.position);
+      if (dir.magnitude() > 0.001) {
+        dir = dir.normalize();
+      } else {
+        dir = entity.team === 'LEFT' ? vec2(1, 0) : vec2(-1, 0);
+      }
+      const speed = 40;
+      const amp = Math.abs(entity.amplitude || 1);
+      const freq = entity.frequency || 1;
+      this.laserIdCounter++;
+
       this.addLaser({
         id: `laser_${this.laserIdCounter}`,
         ownerId: entity.id,
@@ -1607,8 +1703,12 @@ export class SimulationEngine {
         curveType: isCos ? 'COSINE' : 'SINE',
         isTelegraph: false,
         telegraphTime: 0,
-        durationRemaining: 0.8,
+        durationRemaining: 5.0,
         damage: 25,
+        velocity: dir.scale(speed),
+        angle: Math.atan2(dir.y, dir.x),
+        amplitude: amp,
+        frequency: freq,
       });
       return true;
     }
