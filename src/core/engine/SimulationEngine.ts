@@ -199,6 +199,22 @@ export class SimulationEngine {
   }
 
   private updateCombat(dt: number): void {
+    // Clean up dead sub-entities
+    this.subEntities = this.subEntities.filter((e) => !e.isDead);
+
+    // Cancel any lasers whose owners are dead or destroyed
+    const livingIds = new Set<string>();
+    if (!this.leftEntity.isDead) livingIds.add(this.leftEntity.id);
+    if (!this.rightEntity.isDead) livingIds.add(this.rightEntity.id);
+    for (const sub of this.subEntities) {
+      if (!sub.isDead) livingIds.add(sub.id);
+    }
+    const hadDeadLasers = this.activeLasers.some((l) => !livingIds.has(l.ownerId));
+    if (hadDeadLasers) {
+      this.activeLasers = this.activeLasers.filter((l) => livingIds.has(l.ownerId));
+      this.recalcFrozenOwners();
+    }
+
     const allEntities = [this.leftEntity, this.rightEntity, ...this.subEntities].filter(
       (e) => !e.isDead
     );
@@ -923,8 +939,16 @@ export class SimulationEngine {
     const baseAngle = Math.atan2(blastDir.y, blastDir.x);
     const blastSpeed = 28;
 
+    this.eventBus.emit('DAMAGE_DEALT', {
+      targetId: sphere.id,
+      amount: 1,
+      color: '#00ACC1',
+      position: { x: pos.x, y: pos.y },
+    });
+
     if (sphere.symbol === 'x³') {
       sphere.isDead = true;
+      this.interruptLaser(sphere.id);
       this.eventBus.emit('MATH_FORMULA', {
         latex: '3x^2',
         position: { x: pos.x, y: pos.y },
@@ -954,6 +978,7 @@ export class SimulationEngine {
       }
     } else if (sphere.symbol === 'x²') {
       sphere.isDead = true;
+      this.interruptLaser(sphere.id);
       this.eventBus.emit('MATH_FORMULA', {
         latex: '2x',
         position: { x: pos.x, y: pos.y },
@@ -982,6 +1007,7 @@ export class SimulationEngine {
         this.subEntities.push(sub);
       }
     } else if (sphere.symbol === 'x') {
+      this.interruptLaser(sphere.id);
       sphere.symbol = '1';
       sphere.name = '1';
       sphere.radius = 3.6;
@@ -996,6 +1022,7 @@ export class SimulationEngine {
       });
     } else if (sphere.symbol === '1') {
       sphere.isDead = true;
+      this.interruptLaser(sphere.id);
       this.eventBus.emit('MATH_FORMULA', {
         latex: '0',
         position: { x: pos.x, y: pos.y },
@@ -1839,6 +1866,18 @@ export class SimulationEngine {
    */
   private isEntityFrozen(entity: BaseEntity): boolean {
     return this.frozenOwnerIds.has(entity.id);
+  }
+
+  /**
+   * Interrupt and cancel any active laser owned by a specific entity
+   */
+  private interruptLaser(ownerId: string): void {
+    const had = this.activeLasers.some((l) => l.ownerId === ownerId);
+    if (had) {
+      this.activeLasers = this.activeLasers.filter((l) => l.ownerId !== ownerId);
+      this.frozenOwnerIds.delete(ownerId);
+      this.recalcFrozenOwners();
+    }
   }
 
   /**

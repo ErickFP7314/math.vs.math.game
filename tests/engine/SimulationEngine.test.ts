@@ -35,10 +35,40 @@ describe('SimulationEngine', () => {
     // x^3 should break into 3 balls of x^2, and global HP should drop
     expect(engine.subEntities.length).toBe(3);
     expect(engine.rightEntity.hp).toBe(15);
+    expect(engine.rightEntity.isDead).toBe(true);
     // Player (derivative) must NOT take contact damage in Level 1
     expect(engine.leftEntity.hp).toBe(100);
     // CRITICAL: The match must NOT end prematurely when x^3 splits!
     expect(engine.status).toBe('COMBAT');
+  });
+
+  it('cancels active lasers and cleans up dead entities when differentiated or killed', () => {
+    const testBus = new EventBus();
+    const level1 = LevelRegistry.getLevel(1)!;
+    const engine = new SimulationEngine(level1, testBus);
+
+    engine.update(3.1);
+
+    // Give rightEntity an active laser
+    engine.activeLasers.push({
+      id: 'test_enemy_laser',
+      ownerId: engine.rightEntity.id,
+      sourcePos: engine.rightEntity.position.clone(),
+      curveType: 'CUBIC',
+      isTelegraph: false,
+      telegraphTime: 0,
+      durationRemaining: 1.0,
+      damage: 23,
+    });
+    expect(engine.activeLasers.length).toBe(1);
+
+    // Force collision with d/dx: x^3 is differentiated, dies, and its laser is cancelled immediately
+    engine.leftEntity.position = engine.rightEntity.position.clone();
+    engine.update(1 / 60);
+
+    expect(engine.rightEntity.isDead).toBe(true);
+    // Active laser from dead x^3 must be cancelled, not remain as a ghost laser
+    expect(engine.activeLasers.some((l) => l.ownerId === engine.rightEntity.id)).toBe(false);
   });
 
   it('supports player directional steering impulse', () => {

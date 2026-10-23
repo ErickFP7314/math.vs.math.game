@@ -383,11 +383,10 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
         ctx.restore();
       }
 
-      // 6. Draw Entities
-      // Keep main fighters (leftEntity and rightEntity) visible even if defeated so the defeated sphere does not vanish abruptly
+      // 6. Draw Entities (only living entities are rendered to prevent ghost spheres)
       const entities = [
-        engine.leftEntity,
-        engine.rightEntity,
+        ...(!engine.leftEntity.isDead ? [engine.leftEntity] : []),
+        ...(!engine.rightEntity.isDead ? [engine.rightEntity] : []),
         ...engine.subEntities.filter((e) => !e.isDead),
       ];
 
@@ -485,6 +484,8 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
       width: number,
       height: number
     ) => {
+      if (entity.isDead) return;
+
       const p = toScreen(entity.position, width, height);
       const r = entity.radius * (width / 100);
       const isLeft = entity.team === 'LEFT';
