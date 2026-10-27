@@ -392,15 +392,23 @@ export class SimulationEngine {
               position: { x: enemy.position.x, y: enemy.position.y - 4 },
             });
 
-            this.integralConstantCount++;
-            const cIndex = this.integralConstantCount;
-            this.spawnConstantSphere(cIndex);
+            if (this.integralConstantCount < 10) {
+              this.integralConstantCount++;
+              const cIndex = this.integralConstantCount;
+              this.spawnConstantSphere(cIndex);
 
-            this.eventBus.emit('MATH_FORMULA', {
-              latex: `\\int e^x dx = e^x + C_{${cIndex}}`,
-              position: { x: whipTip.x, y: whipTip.y },
-              color: '#F57C00',
-            });
+              this.eventBus.emit('MATH_FORMULA', {
+                latex: `\\int e^x dx = e^x + C_{${cIndex}}`,
+                position: { x: whipTip.x, y: whipTip.y },
+                color: '#F57C00',
+              });
+            } else {
+              this.eventBus.emit('MATH_FORMULA', {
+                latex: `\\int e^x dx = e^x`,
+                position: { x: whipTip.x, y: whipTip.y },
+                color: '#F57C00',
+              });
+            }
 
             // Strong knockback: send e^x flying far away! ("la mande lejos")
             const normal = enemy.position.sub(player.position);
@@ -533,15 +541,23 @@ export class SimulationEngine {
       this.level6ContactCooldown = 0.6; // 600ms contact cooldown
 
       if (this.status === 'COMBAT') {
-        this.integralConstantCount++;
-        const cIndex = this.integralConstantCount;
-        this.spawnConstantSphere(cIndex);
+        if (this.integralConstantCount < 10) {
+          this.integralConstantCount++;
+          const cIndex = this.integralConstantCount;
+          this.spawnConstantSphere(cIndex);
 
-        this.eventBus.emit('MATH_FORMULA', {
-          latex: `\\int e^x dx = e^x + C_{${cIndex}}`,
-          position: { x: collisionPos.x, y: collisionPos.y },
-          color: '#F57C00',
-        });
+          this.eventBus.emit('MATH_FORMULA', {
+            latex: `\\int e^x dx = e^x + C_{${cIndex}}`,
+            position: { x: collisionPos.x, y: collisionPos.y },
+            color: '#F57C00',
+          });
+        } else {
+          this.eventBus.emit('MATH_FORMULA', {
+            latex: `\\int e^x dx = e^x`,
+            position: { x: collisionPos.x, y: collisionPos.y },
+            color: '#F57C00',
+          });
+        }
 
         if (player.isReady()) {
           // Whip strike: -12 HP (-7 and -5) and 5s cooldown
@@ -618,9 +634,13 @@ export class SimulationEngine {
       node.name = nextName;
       node.radius = Math.min(9, 4.5 + nextDegree * 0.7);
 
-      this.integralConstantCount++;
-      const nextC = this.integralConstantCount;
-      this.spawnConstantSphere(nextC);
+      let formulaLatex = `\\int ${prevSymbol} dx = ${nextSymbol}`;
+      if (this.integralConstantCount < 10) {
+        this.integralConstantCount++;
+        const nextC = this.integralConstantCount;
+        this.spawnConstantSphere(nextC);
+        formulaLatex = `\\int ${prevSymbol} dx = ${nextSymbol} + C_{${nextC}}`;
+      }
 
       // Fire Polynomic Beam passing through the node
       this.laserIdCounter++;
@@ -638,7 +658,6 @@ export class SimulationEngine {
         damage: 4,
       });
 
-      const formulaLatex = `\\int ${prevSymbol} dx = ${nextSymbol} + C_{${nextC}}`;
       this.eventBus.emit('MATH_FORMULA', {
         latex: formulaLatex,
         position: { x: collisionPos.x, y: collisionPos.y },
@@ -1034,7 +1053,11 @@ export class SimulationEngine {
     this.subEntities = this.subEntities.filter((e) => !e.isDead);
   }
 
-  private spawnConstantSphere(index: number, forcedPos?: Vector2D): BaseEntity {
+  private spawnConstantSphere(index: number, forcedPos?: Vector2D): BaseEntity | null {
+    if (this.subEntities.length >= 10 || index > 10) {
+      return null;
+    }
+
     let pos = forcedPos;
     if (!pos) {
       // Find a safe spot with ample clearance from both Player (>= 22 units) and Enemy (>= 20 units)

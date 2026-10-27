@@ -1679,5 +1679,72 @@ describe('SimulationEngine', () => {
       expect(matchOverEmitted).toBe(true);
       expect(matchWinner).toBe('LEFT');
     });
+
+    it('Test 7: Enforces strict limit of 10 constant spheres in Level 6', () => {
+      const level6 = LevelRegistry.getLevel(6)!;
+      const testBus = new EventBus();
+      const emittedFormulas: string[] = [];
+      testBus.on('MATH_FORMULA', (payload) => {
+        emittedFormulas.push(payload.latex);
+      });
+
+      const engine = new SimulationEngine(level6, testBus);
+      engine.update(3.1); // Enter combat
+
+      // Force-spawn or simulate generating 10 constants
+      for (let i = 1; i <= 10; i++) {
+        expect(engine.integralConstantCount).toBe(i - 1);
+        // Position player and enemy to collide
+        engine.level6ContactCooldown = 0;
+        engine.leftEntity.position = vec2(0, 0);
+        engine.leftEntity.velocity = vec2(0, 0);
+        engine.rightEntity.position = vec2(0, 0);
+        engine.rightEntity.velocity = vec2(0, 0);
+
+        engine.update(1 / 60);
+        expect(engine.integralConstantCount).toBe(i);
+        expect(engine.subEntities.length).toBe(i);
+
+        // Move newly spawned node far away so player doesn't collide with it
+        engine.subEntities[engine.subEntities.length - 1].position = vec2(-45, -45);
+      }
+
+      expect(engine.integralConstantCount).toBe(10);
+      expect(engine.subEntities.length).toBe(10);
+
+      // Attempt 11th constant generation via ∫ vs e^x body collision
+      engine.level6ContactCooldown = 0;
+      engine.leftEntity.position = vec2(0, 0);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.position = vec2(0, 0);
+      engine.rightEntity.velocity = vec2(0, 0);
+
+      engine.update(1 / 60);
+
+      // Constant count and subEntities MUST remain strictly 10!
+      expect(engine.integralConstantCount).toBe(10);
+      expect(engine.subEntities.length).toBe(10);
+
+      // The emitted formula must NOT include "+ C_11"
+      const lastFormula = emittedFormulas[emittedFormulas.length - 1];
+      expect(lastFormula).toBe('\\int e^x dx = e^x');
+
+      // Attempt 11th constant generation via node integration
+      const nodeToIntegrate = engine.subEntities[0];
+      nodeToIntegrate.position = vec2(0, 0);
+      nodeToIntegrate.invulnerabilityTimer = 0;
+      engine.rightEntity.position = vec2(40, 40); // Move e^x away
+      engine.leftEntity.position = vec2(0, 0);
+
+      engine.update(1 / 60);
+
+      // Node upgrades its degree, but NO new constant sphere is generated
+      expect(nodeToIntegrate.polyDegree).toBe(1);
+      expect(engine.integralConstantCount).toBe(10);
+      expect(engine.subEntities.length).toBe(10);
+      const nodeFormula = emittedFormulas[emittedFormulas.length - 1];
+      expect(nodeFormula).not.toContain('C_11');
+      expect(nodeFormula).toBe('\\int C_1 dx = C_1 x');
+    });
   });
 });
