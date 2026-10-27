@@ -6,10 +6,10 @@ import { Languages } from 'lucide-react';
 export const LanguageSelector: React.FC = () => {
   const { language, setLanguage } = useLanguage();
 
-  const options: { code: Language; label: string }[] = [
-    { code: 'en', label: 'English' },
-    { code: 'es', label: 'Español' },
-    { code: 'ko', label: '한국어' },
+  const options: { code: Language; label: string; flag: string }[] = [
+    { code: 'en', label: 'English', flag: '🇺🇸' },
+    { code: 'es', label: 'Español', flag: '🇪🇸' },
+    { code: 'ko', label: '한국어', flag: '🇰🇷' },
   ];
 
   return (
@@ -21,14 +21,15 @@ export const LanguageSelector: React.FC = () => {
         <button
           key={opt.code}
           onClick={() => setLanguage(opt.code)}
-          className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
+          className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all flex items-center space-x-1 ${
             language === opt.code
               ? 'bg-cyan-500 text-slate-950 shadow-sm'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
           }`}
           title={opt.label}
         >
-          {opt.code.toUpperCase()}
+          <span className="text-xs leading-none">{opt.flag}</span>
+          <span>{opt.code.toUpperCase()}</span>
         </button>
       ))}
     </div>

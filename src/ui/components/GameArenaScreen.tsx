@@ -101,8 +101,9 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
       }, 3000);
     });
 
-    const unsubLaser = globalEventBus.on('LASER_FIRED', () => {
-      soundManager.playLaser();
+    const unsubLaser = globalEventBus.on('LASER_FIRED', (payload) => {
+      const isEnemy = payload?.ownerId ? payload.ownerId !== newEngine.leftEntity.id : false;
+      soundManager.playLaser(isEnemy);
     });
 
     // Start fixed 60Hz game loop
