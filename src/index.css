@@ -6,8 +6,14 @@
 
 /* Custom smooth animations & math canvas styling */
 @layer base {
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
   body {
-    @apply antialiased m-0 p-0 overflow-x-hidden transition-colors duration-200;
+    @apply antialiased overflow-hidden transition-colors duration-200;
   }
 }
 

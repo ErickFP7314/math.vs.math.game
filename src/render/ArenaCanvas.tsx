@@ -884,7 +884,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const gamePos = toGame(x, y, canvas.width, canvas.height);
+    const gamePos = toGame(x, y, rect.width, rect.height);
 
     cursorGamePosRef.current = gamePos;
 
@@ -906,7 +906,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const gamePos = toGame(x, y, canvas.width, canvas.height);
+    const gamePos = toGame(x, y, rect.width, rect.height);
 
     dragStartRef.current = gamePos;
     dragCurrentRef.current = gamePos;
@@ -919,7 +919,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const targetGamePos = toGame(x, y, canvas.width, canvas.height);
+    const targetGamePos = toGame(x, y, rect.width, rect.height);
 
     const dragStart = dragStartRef.current;
     const dragCurrent = dragCurrentRef.current;
@@ -949,7 +949,7 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
 
   return (
     <div
-      className={`relative w-full max-w-[380px] sm:max-w-[400px] aspect-square mx-auto border-[2.5px] border-[#2B2D42] overflow-hidden select-none transition-colors duration-200 ${
+      className={`relative w-full max-w-[min(380px,52vh)] sm:max-w-[400px] aspect-square mx-auto border-[2.5px] border-[#2B2D42] overflow-hidden select-none transition-colors duration-200 ${
         theme === 'dark' ? 'bg-[#060b16]' : 'bg-white'
       }`}
     >

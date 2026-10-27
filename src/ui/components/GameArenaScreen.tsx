@@ -162,10 +162,10 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
   };
 
   return (
-    <div className="w-full h-full max-h-[96vh] flex flex-col items-center justify-between p-1 sm:p-2 relative max-w-md mx-auto">
+    <div className="w-full flex flex-col items-center justify-center p-1 sm:p-2 relative max-w-md mx-auto my-auto">
       {/* Top Controls Toolbar */}
       <div
-        className={`w-full max-w-[400px] flex items-center justify-between px-2 py-1 mb-1 transition-colors duration-200 ${
+        className={`w-full max-w-[400px] flex items-center justify-between px-2 py-1 mb-1.5 transition-colors duration-200 ${
           isDark ? 'text-slate-400' : 'text-slate-600'
         }`}
       >
@@ -230,7 +230,7 @@ export const GameArenaScreen: React.FC<GameArenaScreenProps> = ({
 
       {/* Main Game Stage Container */}
       <div
-        className={`relative w-full max-w-[400px] rounded-2xl overflow-hidden shadow-2xl border transition-colors duration-200 flex flex-col justify-between ${
+        className={`relative w-full max-w-[400px] rounded-2xl overflow-hidden shadow-2xl border transition-colors duration-200 flex flex-col ${
           isDark ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-300'
         }`}
       >

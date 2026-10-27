@@ -50,16 +50,16 @@ export const AppContent: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen flex flex-col selection:bg-cyan-500 selection:text-white font-sans transition-colors duration-200 ${
+      className={`h-[100dvh] w-full flex flex-col selection:bg-cyan-500 selection:text-white font-sans transition-colors duration-200 overflow-hidden ${
         theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900'
       }`}
     >
       <Routes>
-        <Route path="/" element={<div className="flex-1 flex flex-col justify-center items-center p-2"><LevelSelectRoute /></div>} />
-        <Route path="/levels" element={<div className="flex-1 flex flex-col justify-center items-center p-2"><LevelSelectRoute /></div>} />
-        <Route path="/level/:id" element={<div className="flex-1 flex flex-col justify-center items-center p-2"><GameArenaRoute /></div>} />
-        <Route path="/info" element={<div className="w-full h-screen overflow-y-auto custom-scrollbar"><MathInfoRoute /></div>} />
-        <Route path="/info/:id" element={<div className="w-full h-screen overflow-y-auto custom-scrollbar"><MathInfoRoute /></div>} />
+        <Route path="/" element={<div className="flex-1 w-full h-full flex flex-col justify-center items-center p-2 overflow-y-auto custom-scrollbar"><LevelSelectRoute /></div>} />
+        <Route path="/levels" element={<div className="flex-1 w-full h-full flex flex-col justify-center items-center p-2 overflow-y-auto custom-scrollbar"><LevelSelectRoute /></div>} />
+        <Route path="/level/:id" element={<div className="flex-1 w-full h-full flex flex-col justify-center items-center p-1 sm:p-2 overflow-hidden"><GameArenaRoute /></div>} />
+        <Route path="/info" element={<div className="w-full h-full overflow-y-auto custom-scrollbar"><MathInfoRoute /></div>} />
+        <Route path="/info/:id" element={<div className="w-full h-full overflow-y-auto custom-scrollbar"><MathInfoRoute /></div>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

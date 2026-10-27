@@ -1335,8 +1335,9 @@ export const MathInfoScreen: React.FC<MathInfoScreenProps> = ({
                       </div>
                       <div className="text-lg font-mono font-black text-amber-400">
                         {Math.abs(finalTheta - Math.PI) < 0.08 ? (
-                          <span className="text-emerald-400 font-extrabold animate-pulse">
-                            ✨ e^(iπ) + 1 = 0 [Aniquilación Total!]
+                          <span className="text-emerald-400 font-extrabold animate-pulse inline-flex items-center justify-center">
+                            <Sparkles className="w-4 h-4 text-amber-300 mr-1.5 inline" />
+                            <span>e^(iπ) + 1 = 0 [Aniquilación Total!]</span>
                           </span>
                         ) : (
                           <KatexBlock

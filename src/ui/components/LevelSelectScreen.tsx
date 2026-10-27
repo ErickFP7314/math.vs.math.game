@@ -3,7 +3,7 @@ import { LevelRegistry } from '../../core/levels/LevelRegistry';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme/ThemeContext';
 import { LanguageSelector } from './LanguageSelector';
-import { Play, Sun, Moon, BookOpen } from 'lucide-react';
+import { Play, Sun, Moon, BookOpen, Zap } from 'lucide-react';
 
 interface LevelSelectScreenProps {
   onSelectLevel: (levelId: number) => void;
@@ -27,9 +27,10 @@ export const LevelSelectScreen: React.FC<LevelSelectScreenProps> = ({
           isDark ? 'border-slate-800' : 'border-slate-300'
         }`}
       >
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-1.5">
+          <Zap className="w-4 h-4 text-cyan-400 fill-cyan-400" />
           <span className="text-sm font-mono font-black tracking-wider text-cyan-400">
-            ⚡ MATH.VS.MATH
+            MATH.VS.MATH
           </span>
         </div>
 
