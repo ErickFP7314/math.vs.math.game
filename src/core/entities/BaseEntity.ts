@@ -57,7 +57,9 @@ export class BaseEntity implements PhysicalCircle {
   trigPhase = 0;         // for trig (0: sin, 1: cos, 2: -sin, 3: -cos)
   amplitude = 1;         // for trig
   frequency = 1;         // for trig
-  sectorAngle = Math.PI / 6; // for pi
+  sectorAngle = Math.PI / 6; // for pi: θ (aperture)
+  sectorStartAngle = 0;      // for pi: α (leading edge of the rotating sector, radians)
+  tailPhase = 0;             // for pi: time driving the decimal tail oscillation
   activeDecimalIndex = 0;    // for pi
   polyDegree = 0;            // for polynomial degree of constant / sub-entities
   cIndex = 1;                // for constant index C_k
@@ -168,6 +170,8 @@ export class BaseEntity implements PhysicalCircle {
     copy.amplitude = this.amplitude;
     copy.frequency = this.frequency;
     copy.sectorAngle = this.sectorAngle;
+    copy.sectorStartAngle = this.sectorStartAngle;
+    copy.tailPhase = this.tailPhase;
     copy.activeDecimalIndex = this.activeDecimalIndex;
     copy.polyDegree = this.polyDegree;
     copy.cIndex = this.cIndex;

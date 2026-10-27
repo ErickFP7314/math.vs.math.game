@@ -5,6 +5,13 @@ import { Vector2D, vec2 } from '../core/physics/Vector2D';
 import { soundManager } from '../audio/WebAudioSynth';
 import { useTheme } from '../theme/ThemeContext';
 import { globalEventBus } from '../core/engine/EventBus';
+import {
+  SPEC_UNIT,
+  PI_SECTOR_RADIUS,
+  PI_TAIL_GAP,
+  PI_TAIL_SPACING,
+  PI_TAIL_NODE_RADIUS,
+} from '../core/math/SpecModel';
 
 interface ArenaCanvasProps {
   engine: SimulationEngine;
@@ -260,6 +267,41 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
             else ctx.lineTo(pt.x, pt.y);
           }
           ctx.stroke();
+        } else if (laser.curveType === 'SCALED_EXPONENTIAL') {
+          // Level 8 blade: y - y0 = 10(e^((x - x0)/10) - 1), with its dashed asymptote below the centre
+          const asymptoteY = toScreen(vec2(0, laser.sourcePos.y - SPEC_UNIT), width, height).y;
+          ctx.setLineDash([4, 4]);
+          ctx.strokeStyle = '#90CAF9';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(0, asymptoteY);
+          ctx.lineTo(width, asymptoteY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.beginPath();
+          ctx.strokeStyle = laser.isTelegraph ? 'rgba(211, 47, 47, 0.4)' : '#D32F2F';
+          ctx.lineWidth = laser.isTelegraph ? 2 : 4;
+          if (!laser.isTelegraph) {
+            ctx.shadowColor = '#D32F2F';
+            ctx.shadowBlur = 12;
+          }
+          let drawing = false;
+          for (let gx = -50; gx <= 50; gx += 1) {
+            const gy = laser.sourcePos.y + SPEC_UNIT * (Math.exp((gx - laser.sourcePos.x) / SPEC_UNIT) - 1);
+            if (gy < -60 || gy > 60) {
+              drawing = false;
+              continue;
+            }
+            const pt = toScreen(vec2(gx, gy), width, height);
+            if (drawing) {
+              ctx.lineTo(pt.x, pt.y);
+            } else {
+              ctx.moveTo(pt.x, pt.y);
+              drawing = true;
+            }
+          }
+          ctx.stroke();
         } else if (laser.curveType === 'SECTOR') {
           // Circular Sector of Pi
           const span = laser.sectorSpan || Math.PI / 3;
@@ -272,6 +314,51 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
+        } else if (laser.originPos && (laser.curveType === 'SINE' || laser.curveType === 'COSINE')) {
+          // Level 7 wave: dashed guide line on the firing axis, solid trail a·sin(bx) behind the guide node
+          const strokeColor = laser.curveType === 'SINE' ? '#3F51B5' : '#D500F9';
+          const origin = laser.originPos;
+          const travel = laser.sourcePos.sub(origin);
+          const length = travel.magnitude();
+          const direction = length > 0.001 ? travel.scale(1 / length) : vec2(1, 0);
+          const normal = vec2(-direction.y, direction.x);
+          const amplitude = (laser.amplitude || 1) * SPEC_UNIT;
+          const frequency = laser.frequency || 1;
+          const originScreen = toScreen(origin, width, height);
+          const headScreen = toScreen(laser.sourcePos, width, height);
+
+          ctx.setLineDash([4, 4]);
+          ctx.strokeStyle = strokeColor;
+          ctx.globalAlpha = 0.5;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(originScreen.x, originScreen.y);
+          ctx.lineTo(headScreen.x, headScreen.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
+
+          const steps = Math.max(2, Math.ceil(length));
+          ctx.beginPath();
+          for (let step = 0; step <= steps; step++) {
+            const s = (step / steps) * length;
+            const phase = (frequency * s) / SPEC_UNIT;
+            const displacement = amplitude * (laser.curveType === 'COSINE' ? Math.cos(phase) : Math.sin(phase));
+            const point = toScreen(origin.add(direction.scale(s)).add(normal.scale(displacement)), width, height);
+            if (step === 0) ctx.moveTo(point.x, point.y);
+            else ctx.lineTo(point.x, point.y);
+          }
+          ctx.lineWidth = 3.5;
+          ctx.shadowColor = strokeColor;
+          ctx.shadowBlur = 10;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(headScreen.x, headScreen.y, 3.5, 0, Math.PI * 2);
+          ctx.fillStyle = laser.curveType === 'SINE' ? '#81D4FA' : '#F48FB1';
+          ctx.shadowColor = ctx.fillStyle;
+          ctx.shadowBlur = 8;
+          ctx.fill();
         } else if (laser.curveType === 'SINE' || laser.curveType === 'COSINE') {
           const strokeColor = laser.curveType === 'SINE' ? '#3F51B5' : '#D500F9';
           ctx.strokeStyle = strokeColor;
@@ -525,6 +612,27 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
         ctx.globalAlpha = 0.45;
       }
 
+      // Rotating circular sector of π (sensor, drawn beneath the body). Game angles are CCW, screen angles CW.
+      if (entity.symbol === 'π') {
+        ctx.save();
+        ctx.fillStyle = 'rgba(25, 118, 210, 0.22)';
+        ctx.strokeStyle = '#1976D2';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.arc(
+          p.x,
+          p.y,
+          PI_SECTOR_RADIUS * (width / 100),
+          -(entity.sectorStartAngle + entity.sectorAngle),
+          -entity.sectorStartAngle
+        );
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
       // Shield or Hexagon for e^x immunity
       if (entity.isImmuneToDerivative) {
         ctx.save();
@@ -580,24 +688,47 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
         ctx.restore();
       }
 
-      // Orbital decimal digit tail for Pi (π)
+      // Decimal digit tail of π: the engine's active node (the one closest to the body) followed by the next three digits
       if (entity.symbol === 'π') {
-        const orbitRadius = r + 16;
-        const currentDigit = engine.piDigits[entity.activeDecimalIndex % engine.piDigits.length];
-        const orbitAngle = Date.now() * 0.003;
-        const ox = p.x + orbitRadius * Math.cos(orbitAngle);
-        const oy = p.y + orbitRadius * Math.sin(orbitAngle);
+        const unit = width / 100;
+        const tailAngle = engine.getPiTailAngle(entity);
+        const screenDir = { x: Math.cos(tailAngle), y: -Math.sin(tailAngle) };
+        const nodeAt = (distance: number) => ({
+          x: p.x + screenDir.x * distance * unit,
+          y: p.y + screenDir.y * distance * unit,
+        });
+        const activeDistance = entity.radius + PI_TAIL_GAP;
 
-        ctx.fillStyle = '#1E88E5';
+        ctx.save();
+        ctx.strokeStyle = '#1E88E5';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(ox, oy, 8, 0, Math.PI * 2);
-        ctx.fill();
+        const tailStart = nodeAt(entity.radius);
+        const tailEnd = nodeAt(activeDistance + 3 * PI_TAIL_SPACING);
+        ctx.moveTo(tailStart.x, tailStart.y);
+        ctx.lineTo(tailEnd.x, tailEnd.y);
+        ctx.stroke();
 
-        ctx.font = 'bold 11px monospace';
-        ctx.fillStyle = '#FFFFFF';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(currentDigit.toString(), ox, oy);
+        for (let k = 0; k < 4; k++) {
+          const node = nodeAt(activeDistance + k * PI_TAIL_SPACING);
+          const digit = engine.piDigits[(engine.piCurrentDigitIndex + k) % engine.piDigits.length];
+          const isActive = k === 0;
+          ctx.fillStyle = isActive ? '#1E88E5' : 'rgba(30, 136, 229, 0.55)';
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, (isActive ? PI_TAIL_NODE_RADIUS : PI_TAIL_NODE_RADIUS - 0.5) * unit, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.font = isActive ? 'bold 11px monospace' : '9px monospace';
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillText(digit.toString(), node.x, node.y);
+        }
+
+        const ellipsis = nodeAt(activeDistance + 4 * PI_TAIL_SPACING);
+        ctx.font = 'bold 10px monospace';
+        ctx.fillStyle = '#1E88E5';
+        ctx.fillText('...', ellipsis.x, ellipsis.y);
+        ctx.restore();
       }
 
       // Apéndice / Cola ("Látigo ∫") for Integral (∫)
@@ -721,6 +852,19 @@ export const ArenaCanvas: React.FC<ArenaCanvasProps> = ({ engine, playerBadgeTex
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(entity.symbol, p.x, p.y);
+      }
+
+      // Level 7 directional cannon: a dot on the outer edge pointing along the current velocity
+      if (engine.level.id === 7) {
+        const speed = Math.hypot(entity.velocity.x, entity.velocity.y);
+        if (speed > 0.001) {
+          const cannonX = p.x + (entity.velocity.x / speed) * (r + 4);
+          const cannonY = p.y - (entity.velocity.y / speed) * (r + 4);
+          ctx.fillStyle = isLeft ? '#00A8E8' : '#F97316';
+          ctx.beginPath();
+          ctx.arc(cannonX, cannonY, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       ctx.restore();

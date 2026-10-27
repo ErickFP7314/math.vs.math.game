@@ -93,4 +93,38 @@ describe('Curves Math & Collision', () => {
     expect(Curves.intersectsCosine(vec2(0, 12), 2, origin)).toBe(true);
     expect(Curves.intersectsCosine(vec2(0, -30), 2, origin)).toBe(false);
   });
+
+  it('detects circles touching the scaled exponential y - y0 = 10(e^((x - x0)/10) - 1)', () => {
+    const origin = vec2(0, 0);
+    // Passes through its own origin and rises steeply to the right
+    expect(Curves.intersectsScaledExponential(vec2(0, 0), 1, origin, 10)).toBe(true);
+    expect(Curves.intersectsScaledExponential(vec2(15, 10 * (Math.exp(1.5) - 1)), 2, origin, 10)).toBe(true);
+    expect(Curves.intersectsScaledExponential(vec2(0, 30), 2, origin, 10)).toBe(false);
+  });
+
+  it('detects circles inside or touching a circular sector', () => {
+    const center = vec2(0, 0);
+    const radius = 20;
+    const start = Math.PI / 2 - Math.PI / 12; // sector centred on +y with θ = π/6
+    const span = Math.PI / 6;
+
+    expect(Curves.circleIntersectsSector(vec2(0, 15), 6.5, center, radius, start, span)).toBe(true);
+    // Circle centre outside the radius but its edge reaches the arc
+    expect(Curves.circleIntersectsSector(vec2(0, 25), 6.5, center, radius, start, span)).toBe(true);
+    // Circle centre outside the radius and beyond the arc
+    expect(Curves.circleIntersectsSector(vec2(0, 30), 6.5, center, radius, start, span)).toBe(false);
+    // Opposite side of the apex
+    expect(Curves.circleIntersectsSector(vec2(0, -15), 6.5, center, radius, start, span)).toBe(false);
+    // Full circle sector covers everything within the radius
+    expect(Curves.circleIntersectsSector(vec2(-15, 0), 2, center, radius, 0, 2 * Math.PI)).toBe(true);
+    expect(Curves.circleIntersectsSector(vec2(-25, 0), 2, center, radius, 0, 2 * Math.PI)).toBe(false);
+  });
+
+  it('computes the distance from a point to the sector boundary (radii and arc)', () => {
+    const center = vec2(0, 0);
+    // Sector from 0 to π/2 with radius 10
+    expect(Curves.distanceToSectorBoundary(vec2(5, 0), center, 10, 0, Math.PI / 2)).toBeCloseTo(0, 9);
+    expect(Curves.distanceToSectorBoundary(vec2(0, 12), center, 10, 0, Math.PI / 2)).toBeCloseTo(2, 9);
+    expect(Curves.distanceToSectorBoundary(vec2(-3, 0), center, 10, 0, Math.PI / 2)).toBeCloseTo(3, 9);
+  });
 });

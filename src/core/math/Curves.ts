@@ -1,4 +1,4 @@
-import { Vector2D } from '../physics/Vector2D';
+import { Vector2D, vec2 } from '../physics/Vector2D';
 
 export class Curves {
   /**
@@ -89,6 +89,100 @@ export class Curves {
 
     let diff = (normAngle - normStart + 2 * Math.PI) % (2 * Math.PI);
     return diff <= spanAngle;
+  }
+
+  /**
+   * Check if a circle intersects the scaled exponential y - y0 = unit * (e^((x - x0) / unit) - 1),
+   * which passes through its own origin (x0, y0)
+   */
+  static intersectsScaledExponential(
+    circleCenter: Vector2D,
+    radius: number,
+    origin: Vector2D,
+    unit: number,
+    minX = -50,
+    maxX = 50,
+    samples = 48
+  ): boolean {
+    const xStart = Math.max(minX, circleCenter.x - radius);
+    const xEnd = Math.min(maxX, circleCenter.x + radius);
+    if (xStart > xEnd) return false;
+
+    const step = (xEnd - xStart) / samples;
+    const rSq = radius * radius;
+
+    for (let i = 0; i <= samples; i++) {
+      const x = xStart + i * step;
+      const y = origin.y + unit * (Math.exp((x - origin.x) / unit) - 1);
+      const dx = x - circleCenter.x;
+      const dy = y - circleCenter.y;
+      if (dx * dx + dy * dy <= rSq) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Distance from a point to the boundary of a circular sector
+   * (both straight radii and the arc).
+   */
+  static distanceToSectorBoundary(
+    point: Vector2D,
+    center: Vector2D,
+    radius: number,
+    startAngle: number,
+    spanAngle: number
+  ): number {
+    const fullCircle = spanAngle >= Math.PI * 2;
+    const arcStart = vec2(center.x + radius * Math.cos(startAngle), center.y + radius * Math.sin(startAngle));
+    const endAngle = startAngle + spanAngle;
+    const arcEnd = vec2(center.x + radius * Math.cos(endAngle), center.y + radius * Math.sin(endAngle));
+
+    let best = Infinity;
+    if (!fullCircle) {
+      best = Math.min(
+        this.distanceToSegment(point, center, arcStart),
+        this.distanceToSegment(point, center, arcEnd)
+      );
+    }
+
+    const distToCenter = point.distanceTo(center);
+    const angle = Math.atan2(point.y - center.y, point.x - center.x);
+    const relative = (((angle - startAngle) % (Math.PI * 2)) + Math.PI * 4) % (Math.PI * 2);
+    if (fullCircle || relative <= spanAngle) {
+      best = Math.min(best, Math.abs(distToCenter - radius));
+    } else {
+      best = Math.min(best, point.distanceTo(arcStart), point.distanceTo(arcEnd));
+    }
+
+    return best;
+  }
+
+  /**
+   * Check if a circle intersects a circular sector (apex at center, radius, start angle and span in radians)
+   */
+  static circleIntersectsSector(
+    circleCenter: Vector2D,
+    circleRadius: number,
+    sectorCenter: Vector2D,
+    sectorRadius: number,
+    startAngle: number,
+    spanAngle: number
+  ): boolean {
+    if (this.isInsideSector(circleCenter, sectorCenter, sectorRadius, startAngle, spanAngle)) {
+      return true;
+    }
+    return this.distanceToSectorBoundary(circleCenter, sectorCenter, sectorRadius, startAngle, spanAngle) <= circleRadius;
+  }
+
+  private static distanceToSegment(point: Vector2D, a: Vector2D, b: Vector2D): number {
+    const ab = b.sub(a);
+    const lengthSq = ab.magnitudeSq();
+    if (lengthSq === 0) return point.distanceTo(a);
+    const t = Math.max(0, Math.min(1, point.sub(a).dot(ab) / lengthSq));
+    return point.distanceTo(a.add(ab.scale(t)));
   }
 
   /**

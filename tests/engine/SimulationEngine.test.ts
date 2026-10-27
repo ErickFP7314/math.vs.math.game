@@ -178,8 +178,8 @@ describe('SimulationEngine', () => {
 
   it('deals contact collision damage to enemies in standard matches', () => {
     const testBus = new EventBus();
-    const level7 = LevelRegistry.getLevel(7)!;
-    const engine = new SimulationEngine(level7, testBus);
+    const level10 = LevelRegistry.getLevel(10)!;
+    const engine = new SimulationEngine(level10, testBus);
 
     engine.update(3.1);
     const initialEnemyHp = engine.rightEntity.hp;
@@ -216,7 +216,7 @@ describe('SimulationEngine', () => {
 
     const initialEnemyPos = engine.rightEntity.position.clone();
     // Keep player safely away so random kinematics do not trigger a collision during this freeze check
-    engine.leftEntity.position = vec2(-30, -30);
+    engine.leftEntity.position = engine.rightEntity.position.x > 0 ? vec2(-40, -40) : vec2(40, 40);
     const initialPlayerPos = engine.leftEntity.position.clone();
     // Advance slightly while frozen - enemy should NOT move, but player continues moving freely
     engine.update(0.1);
@@ -369,6 +369,52 @@ describe('SimulationEngine', () => {
 
     // Should emit '0'
     expect(emittedFormulas).toContain('0');
+  });
+
+  it('emits simplified math result texts without equality (=) across other levels (Level 2, 4, 5, 6)', () => {
+    // Level 2: d/dx vs e^x
+    const bus2 = new EventBus();
+    const formulas2: string[] = [];
+    bus2.on('MATH_FORMULA', (p) => formulas2.push(p.latex));
+    const engine2 = new SimulationEngine(LevelRegistry.getLevel(2)!, bus2);
+    engine2.update(3.1);
+    engine2.leftEntity.position = engine2.rightEntity.position.clone();
+    engine2.update(1 / 60);
+    expect(formulas2).toContain('e^x');
+    expect(formulas2.some((f) => f.includes('='))).toBe(false);
+
+    // Level 4: ∂/∂y vs e^x
+    const bus4 = new EventBus();
+    const formulas4: string[] = [];
+    bus4.on('MATH_FORMULA', (p) => formulas4.push(p.latex));
+    const engine4 = new SimulationEngine(LevelRegistry.getLevel(4)!, bus4);
+    engine4.update(3.1);
+    engine4.leftEntity.position = engine4.rightEntity.position.clone();
+    engine4.update(1 / 60);
+    expect(formulas4).toContain('0');
+    expect(formulas4.some((f) => f.includes('='))).toBe(false);
+
+    // Level 5: d/dx vs sin x -> cos x
+    const bus5 = new EventBus();
+    const formulas5: string[] = [];
+    bus5.on('MATH_FORMULA', (p) => formulas5.push(p.latex));
+    const engine5 = new SimulationEngine(LevelRegistry.getLevel(5)!, bus5);
+    engine5.update(3.1);
+    engine5.leftEntity.position = engine5.rightEntity.position.clone();
+    engine5.update(1 / 60);
+    expect(formulas5).toContain('\\cos x');
+    expect(formulas5.some((f) => f.includes('='))).toBe(false);
+
+    // Level 6: ∫ vs e^x -> e^x + C_1
+    const bus6 = new EventBus();
+    const formulas6: string[] = [];
+    bus6.on('MATH_FORMULA', (p) => formulas6.push(p.latex));
+    const engine6 = new SimulationEngine(LevelRegistry.getLevel(6)!, bus6);
+    engine6.update(3.1);
+    engine6.leftEntity.position = engine6.rightEntity.position.clone();
+    engine6.update(1 / 60);
+    expect(formulas6).toContain('e^x + C_{1}');
+    expect(formulas6.some((f) => f.includes('='))).toBe(false);
   });
 
   it('selectively interrupts only the laser of the collided enemy sphere while others keep firing', () => {
@@ -807,11 +853,11 @@ describe('SimulationEngine', () => {
       // In the exact frame where distance <= R1 + R2:
       engine.update(1 / 60);
 
-      // e^x drops from 80 to 0 instantly (-80 HP)
+      // e^x drops from 80 to 0 instantly (-80 HP) and emits direct result '0' without '='
       expect(engine.rightEntity.hp).toBe(0);
       expect(engine.rightEntity.isDead).toBe(true);
       expect(damageDealtToEnemy).toBe(80);
-      expect(formulaReceived).toContain('\\frac{\\partial}{\\partial y}');
+      expect(formulaReceived).toBe('0');
 
       // Player receives 0 recoil/contact damage
       expect(engine.leftEntity.hp).toBe(playerHpBefore);
@@ -1725,9 +1771,9 @@ describe('SimulationEngine', () => {
       expect(engine.integralConstantCount).toBe(10);
       expect(engine.subEntities.length).toBe(10);
 
-      // The emitted formula must NOT include "+ C_11"
+      // The emitted formula must NOT include "+ C_11" and shows direct result 'e^x'
       const lastFormula = emittedFormulas[emittedFormulas.length - 1];
-      expect(lastFormula).toBe('\\int e^x dx = e^x');
+      expect(lastFormula).toBe('e^x');
 
       // Attempt 11th constant generation via node integration
       const nodeToIntegrate = engine.subEntities[0];
@@ -1744,7 +1790,413 @@ describe('SimulationEngine', () => {
       expect(engine.subEntities.length).toBe(10);
       const nodeFormula = emittedFormulas[emittedFormulas.length - 1];
       expect(nodeFormula).not.toContain('C_11');
-      expect(nodeFormula).toBe('\\int C_1 dx = C_1 x');
+      expect(nodeFormula).toBe('C_1 x');
+    });
+  });
+
+  describe('Level 7 (reglas2/nivel7.md) Specifications', () => {
+    const fireFromLeft = (engine: SimulationEngine): void => {
+      engine.rightEntity.cooldownRemaining = 1e9;
+      engine.leftEntity.velocity = vec2(1, 0);
+      engine.leftEntity.cooldownRemaining = 0;
+      engine.update(1 / 60);
+    };
+
+    it('initializes sin x and cos x at (-35, 0) / (35, 0) with 100 HP, a = b = 1 and T = 2π pre-loaded at 50%', () => {
+      const engine = new SimulationEngine(LevelRegistry.getLevel(7)!, new EventBus());
+      expect(engine.leftEntity.hp).toBe(100);
+      expect(engine.rightEntity.hp).toBe(100);
+      expect(engine.leftEntity.position).toEqual(vec2(-35, 0));
+      expect(engine.rightEntity.position).toEqual(vec2(35, 0));
+      expect(engine.leftEntity.cooldownMax).toBeCloseTo(2 * Math.PI, 9);
+      expect(engine.rightEntity.cooldownMax).toBeCloseTo(2 * Math.PI, 9);
+
+      engine.update(3.1);
+      expect(engine.status).toBe('COMBAT');
+      expect(engine.leftEntity.amplitude).toBe(1);
+      expect(engine.leftEntity.frequency).toBe(1);
+      expect(engine.leftEntity.cooldownRemaining).toBeCloseTo(Math.PI, 9);
+    });
+
+    it('Test 0: first wave of each entity fires only after the remaining half period (π seconds)', () => {
+      const engine = new SimulationEngine(LevelRegistry.getLevel(7)!, new EventBus());
+      engine.update(3.1);
+      engine.update(3.0);
+      expect(engine.activeLasers.length).toBe(0);
+      engine.update(0.2);
+      expect(engine.activeLasers.some((l) => l.curveType === 'SINE' || l.curveType === 'COSINE')).toBe(true);
+    });
+
+    it('Test 1: Damage is always -25 HP whatever the amplitude a, while the hitbox width grows with a', () => {
+      const runShot = (amplitude: number, targetOffset: { x: number; y: number }): number => {
+        const engine = new SimulationEngine(LevelRegistry.getLevel(7)!, new EventBus());
+        engine.update(3.1);
+        engine.leftEntity.amplitude = amplitude;
+        engine.rightEntity.position = vec2(30, -40);
+        engine.rightEntity.velocity = vec2(0, 0);
+        fireFromLeft(engine);
+
+        const wave = engine.activeLasers.find((l) => l.originPos)!;
+        const origin = wave.originPos!;
+        engine.rightEntity.position = vec2(origin.x + targetOffset.x, origin.y + targetOffset.y);
+        engine.leftEntity.cooldownRemaining = 1e9;
+        for (let frame = 0; frame < 120; frame++) {
+          engine.update(1 / 60);
+        }
+        return engine.rightEntity.hp;
+      };
+
+      // Point on the axis where a·sin(bx) = 0 (x = 10π): hit by any amplitude for -25 HP
+      expect(runShot(1, { x: 10 * Math.PI, y: 0 })).toBe(75);
+      expect(runShot(16, { x: 10 * Math.PI, y: 0 })).toBe(75);
+      // Lateral point 40 units off-axis: only the 16× wide wave reaches it
+      expect(runShot(1, { x: 2.527, y: 40 })).toBe(100);
+      expect(runShot(16, { x: 2.527, y: 40 })).toBe(75);
+    });
+
+    it('Test 2: Each b × 2 node halves the cooldown instantly: 6.28s → 3.14s → 1.57s → 0.79s → 0.39s', () => {
+      const engine = new SimulationEngine(LevelRegistry.getLevel(7)!, new EventBus());
+      engine.update(3.1);
+      engine.orbSpawnTimer = 1e9;
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.velocity = vec2(0, 0);
+      engine.rightEntity.position = vec2(40, -40);
+
+      const expected = [6.28, 3.14, 1.57, 0.79, 0.39];
+      expect(engine.leftEntity.cooldownMax).toBeCloseTo(2 * Math.PI, 9);
+      for (let step = 1; step < expected.length; step++) {
+        engine.orbs = [{ id: `b2_${step}`, type: 'FREQUENCY_X2', position: engine.leftEntity.position.clone(), radius: 4 }];
+        engine.update(1 / 60);
+        expect(engine.leftEntity.frequency).toBe(2 ** step);
+        expect(engine.leftEntity.cooldownMax).toBeCloseTo(2 * Math.PI / 2 ** step, 9);
+        expect(expected[step]).toBeCloseTo(engine.leftEntity.cooldownMax, 2);
+      }
+    });
+
+    it('Test 3: Waves follow the velocity vector and ignore the opponent position (no auto-aim)', () => {
+      const engine = new SimulationEngine(LevelRegistry.getLevel(7)!, new EventBus());
+      engine.update(3.1);
+      engine.leftEntity.position = vec2(0, 0);
+      engine.leftEntity.velocity = vec2(1, 0);
+      engine.rightEntity.position = vec2(0, 40);
+      engine.rightEntity.velocity = vec2(0, 0);
+      fireFromLeft(engine);
+
+      const wave = engine.activeLasers.find((l) => l.originPos)!;
+      expect(wave.velocity!.y).toBeCloseTo(0, 9);
+      expect(wave.velocity!.x).toBeGreaterThan(0);
+      expect(wave.angle).toBeCloseTo(0, 9);
+    });
+
+    it('Test 4: Yellow nodes never bounce a ball; each entity consumes the node and multiplies its own equation', () => {
+      const engine = new SimulationEngine(LevelRegistry.getLevel(7)!, new EventBus());
+      engine.update(3.1);
+      engine.orbSpawnTimer = 1e9;
+      const diagonal = vec2(Math.SQRT1_2 * 30, Math.SQRT1_2 * 30);
+
+      engine.leftEntity.position = vec2(-20, -20);
+      engine.leftEntity.velocity = diagonal;
+      engine.rightEntity.position = vec2(20, 30);
+      engine.rightEntity.velocity = vec2(-diagonal.x, -diagonal.y);
+      engine.orbs = [
+        { id: 'a2', type: 'AMPLITUDE_X2', position: vec2(-16, -16), radius: 4 },
+        { id: 'b2', type: 'FREQUENCY_X2', position: vec2(16, 26), radius: 4 },
+      ];
+
+      engine.update(1 / 60);
+
+      expect(engine.orbs.length).toBe(0);
+      expect(engine.leftEntity.velocity.x).toBeCloseTo(diagonal.x, 6);
+      expect(engine.leftEntity.velocity.y).toBeCloseTo(diagonal.y, 6);
+      expect(engine.rightEntity.velocity.x).toBeCloseTo(-diagonal.x, 6);
+      expect(engine.rightEntity.amplitude).toBe(1);
+      expect(engine.leftEntity.amplitude).toBe(2);
+      expect(engine.rightEntity.frequency).toBe(2);
+      expect(engine.leftEntity.frequency).toBe(1);
+    });
+
+    it('Test 5: A b = 16 wave with dozens of crests deals exactly one -25 HP hit per shot', () => {
+      const engine = new SimulationEngine(LevelRegistry.getLevel(7)!, new EventBus());
+      engine.update(3.1);
+      engine.leftEntity.frequency = 16;
+      engine.leftEntity.cooldownMax = 2 * Math.PI / 16;
+      engine.leftEntity.position = vec2(-40, 0);
+      engine.rightEntity.position = vec2(40, -40);
+      engine.rightEntity.velocity = vec2(0, 0);
+      fireFromLeft(engine);
+
+      const origin = engine.activeLasers.find((l) => l.originPos)!.originPos!;
+      // Axis point where sin(16s / 10) = 0 along the trail (many crests lie around it)
+      engine.rightEntity.position = vec2(origin.x + (10 * Math.PI * 20) / 16, origin.y);
+      engine.leftEntity.cooldownRemaining = 1e9;
+      for (let frame = 0; frame < 240; frame++) {
+        engine.update(1 / 60);
+      }
+      expect(engine.rightEntity.hp).toBe(75);
+    });
+
+    it('Contact between sin x and cos x deals 0 HP and does not alter either equation', () => {
+      const engine = new SimulationEngine(LevelRegistry.getLevel(7)!, new EventBus());
+      engine.update(3.1);
+      engine.leftEntity.position = vec2(0, 0);
+      engine.rightEntity.position = vec2(10, 0);
+      engine.leftEntity.velocity = vec2(10, 0);
+      engine.rightEntity.velocity = vec2(-10, 0);
+      engine.leftEntity.cooldownRemaining = 1e9;
+      engine.rightEntity.cooldownRemaining = 1e9;
+      engine.update(1 / 60);
+
+      expect(engine.leftEntity.hp).toBe(100);
+      expect(engine.rightEntity.hp).toBe(100);
+      expect(engine.leftEntity.amplitude).toBe(1);
+      expect(engine.rightEntity.frequency).toBe(1);
+    });
+
+    it('Shooters keep moving freely while their wave is in flight (no freezing)', () => {
+      const engine = new SimulationEngine(LevelRegistry.getLevel(7)!, new EventBus());
+      engine.update(3.1);
+      engine.rightEntity.cooldownRemaining = 1e9;
+      engine.leftEntity.position = vec2(-40, 0);
+      engine.leftEntity.velocity = vec2(20, 0);
+      fireFromLeft(engine);
+      expect(engine.isFrozen).toBe(false);
+      const before = engine.leftEntity.position.x;
+      engine.update(0.1);
+      expect(engine.leftEntity.position.x).toBeGreaterThan(before);
+    });
+  });
+
+  describe('Level 8 (reglas2/nivel8.md) Specifications', () => {
+    const setupLevel8 = (): SimulationEngine => {
+      const engine = new SimulationEngine(LevelRegistry.getLevel(8)!, new EventBus());
+      engine.update(3.1);
+      engine.leftEntity.cooldownRemaining = 1e9;
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.velocity = vec2(0, 0);
+      return engine;
+    };
+
+    it('initializes e^x (80 HP, [READY] during countdown) vs π (75 HP, θ = π/6) with the sector and tail attached', () => {
+      const engine = new SimulationEngine(LevelRegistry.getLevel(8)!, new EventBus());
+      expect(engine.leftEntity.hp).toBe(80);
+      expect(engine.rightEntity.hp).toBe(75);
+      expect(engine.rightEntity.sectorAngle).toBeCloseTo(Math.PI / 6, 9);
+      expect(engine.leftEntity.cooldownRemaining).toBe(1.0);
+      engine.update(3.1);
+      expect(engine.leftEntity.cooldownRemaining).toBeCloseTo(1.0, 9);
+    });
+
+    it('Test 1: Six touches on the active digit deal -3, -1, -4, -1, -5, -9 HP (80 → 57) and consume the queue in order', () => {
+      const engine = setupLevel8();
+      engine.piSectorCooldown = 1e9;
+      const digits = [3, 1, 4, 1, 5, 9];
+      let expectedHp = 80;
+
+      for (const digit of digits) {
+        engine.leftEntity.position = engine.getPiTailPosition(engine.rightEntity);
+        const indexBefore = engine.piCurrentDigitIndex;
+        engine.update(1 / 60);
+        expectedHp -= digit;
+        expect(engine.leftEntity.hp).toBe(expectedHp);
+        expect(engine.piCurrentDigitIndex).toBe(indexBefore + 1);
+        engine.leftEntity.position = vec2(-40, -40);
+        engine.update(1 / 60);
+      }
+      expect(engine.leftEntity.hp).toBe(57);
+    });
+
+    it('Test 2: Five sector cuts deal -15 HP each and grow θ π/6 → π/3 → π/2 → π → 2π → π/6', () => {
+      const engine = setupLevel8();
+      const expectedHp = [65, 50, 35, 20, 5];
+      const expectedNext = [Math.PI / 3, Math.PI / 2, Math.PI, 2 * Math.PI, Math.PI / 6];
+
+      for (let cut = 0; cut < 5; cut++) {
+        const pi = engine.rightEntity;
+        const span = pi.sectorAngle;
+        const direction = span >= 2 * Math.PI ? 0 : pi.sectorStartAngle + span / 2;
+        engine.piSectorCooldown = 0;
+        engine.leftEntity.position = pi.position.add(vec2(Math.cos(direction), Math.sin(direction)).scale(18));
+        engine.update(1 / 60);
+
+        expect(engine.leftEntity.hp).toBe(expectedHp[cut]);
+        expect(pi.sectorAngle).toBeCloseTo(expectedNext[cut], 9);
+      }
+    });
+
+    it('Test 3: The decimal tail and the sector are independent hitboxes (tail touch does not trigger the cut)', () => {
+      const engine = setupLevel8();
+      engine.rightEntity.sectorStartAngle = 0;
+      engine.rightEntity.tailPhase = 0;
+      engine.leftEntity.position = engine.getPiTailPosition(engine.rightEntity);
+      engine.update(1 / 60);
+
+      expect(engine.leftEntity.hp).toBe(77);
+      expect(engine.rightEntity.sectorAngle).toBeCloseTo(Math.PI / 6, 9);
+    });
+
+    it('Test 4: Sector and digit resolve independently in the same frame when θ = 2π covers the tail (-16 HP)', () => {
+      const engine = setupLevel8();
+      engine.piCurrentDigitIndex = 1;
+      engine.rightEntity.sectorAngle = 2 * Math.PI;
+      engine.piSectorCooldown = 0;
+      engine.leftEntity.position = engine.getPiTailPosition(engine.rightEntity);
+      engine.update(1 / 60);
+
+      expect(engine.leftEntity.hp).toBe(80 - 15 - 1);
+      expect(engine.rightEntity.sectorAngle).toBeCloseTo(Math.PI / 6, 9);
+    });
+
+    it('Test 5: Exponential blade flat section inflicts two -4 impacts plus Burn; steep section inflicts a single -20', () => {
+      const flat = setupLevel8();
+      flat.piSectorCooldown = 1e9;
+      flat.leftEntity.position = vec2(0, 0);
+      flat.rightEntity.position = vec2(-16, 10 * (Math.exp(-1.6) - 1));
+      flat.leftEntity.cooldownRemaining = 0;
+      flat.update(1 / 60); // telegraph starts
+      flat.update(1.0); // telegraph ends and the curve becomes active
+      flat.leftEntity.cooldownRemaining = 1e9;
+      flat.update(1 / 60);
+
+      expect(flat.rightEntity.hp).toBe(75 - 8 - 2);
+      expect(flat.rightEntity.hasStatus('BURN')).toBe(true);
+      for (let frame = 0; frame < 156; frame++) {
+        flat.update(1 / 60);
+      }
+      expect(flat.rightEntity.hp).toBe(75 - 8 - 2 - 8);
+
+      const steep = setupLevel8();
+      steep.piSectorCooldown = 1e9;
+      steep.leftEntity.position = vec2(0, 0);
+      steep.rightEntity.position = vec2(15, 10 * (Math.exp(1.5) - 1));
+      steep.leftEntity.cooldownRemaining = 0;
+      steep.update(1 / 60);
+      steep.update(1.0);
+      steep.leftEntity.cooldownRemaining = 1e9;
+      steep.update(1 / 60);
+
+      expect(steep.rightEntity.hp).toBe(55);
+      expect(steep.rightEntity.hasStatus('BURN')).toBe(false);
+    });
+  });
+
+  describe('Level 9 (reglas2/nivel9.md) Specifications', () => {
+    const setupLevel9 = (): SimulationEngine => {
+      const engine = new SimulationEngine(LevelRegistry.getLevel(9)!, new EventBus());
+      engine.update(3.1);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.velocity = vec2(0, 0);
+      return engine;
+    };
+
+    it('initializes i (50 HP, Estado 1 [i Penetración] from 00:03) vs π (75 HP, θ = π/6)', () => {
+      const engine = new SimulationEngine(LevelRegistry.getLevel(9)!, new EventBus());
+      expect(engine.leftEntity.hp).toBe(50);
+      expect(engine.rightEntity.hp).toBe(75);
+      expect(engine.leftEntity.currentPhaseIndex).toBe(0);
+      expect(engine.rightEntity.sectorAngle).toBeCloseTo(Math.PI / 6, 9);
+    });
+
+    it('cycles i every 3s and shows the transition formulas i×i=-1, -1×i=-i, -i×i=1, 1×i=i', () => {
+      const bus = new EventBus();
+      const formulas: string[] = [];
+      bus.on('MATH_FORMULA', (payload) => formulas.push(payload.latex));
+      const engine = new SimulationEngine(LevelRegistry.getLevel(9)!, bus);
+      engine.update(3.1);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.velocity = vec2(0, 0);
+
+      engine.update(3.0);
+      expect(engine.leftEntity.currentPhaseIndex).toBe(1);
+      engine.update(3.0);
+      expect(engine.leftEntity.currentPhaseIndex).toBe(2);
+      engine.update(3.0);
+      expect(engine.leftEntity.currentPhaseIndex).toBe(3);
+      engine.update(3.0);
+      expect(engine.leftEntity.currentPhaseIndex).toBe(0);
+
+      for (const formula of ['i \\times i = -1', '-1 \\times i = -i', '-i \\times i = 1', '1 \\times i = i']) {
+        expect(formulas).toContain(formula);
+      }
+    });
+
+    it('Test 1: Reflected sector cut (×(-1) 15) lowers π to 60 HP, keeps i at 50 HP and evolves θ to π/3', () => {
+      const bus = new EventBus();
+      const formulas: string[] = [];
+      bus.on('MATH_FORMULA', (payload) => formulas.push(payload.latex));
+      const engine = new SimulationEngine(LevelRegistry.getLevel(9)!, bus);
+      engine.update(3.1);
+      engine.leftEntity.velocity = vec2(0, 0);
+      engine.rightEntity.velocity = vec2(0, 0);
+      engine.leftEntity.currentPhaseIndex = 1;
+      engine.rightEntity.sectorStartAngle = 5 * Math.PI / 12;
+      engine.leftEntity.position = engine.rightEntity.position.add(vec2(0, 15));
+      engine.update(1 / 60);
+
+      expect(engine.rightEntity.hp).toBe(60);
+      expect(engine.leftEntity.hp).toBe(50);
+      expect(engine.rightEntity.sectorAngle).toBeCloseTo(Math.PI / 3, 9);
+      expect(formulas.some((f) => f.includes('\\times(-1)\\ 15'))).toBe(true);
+    });
+
+    it('Test 2: Reflected digits (-3 then -1) consume the queue and i takes no damage', () => {
+      const engine = setupLevel9();
+      engine.leftEntity.currentPhaseIndex = 1;
+      engine.piSectorCooldown = 1e9;
+
+      engine.leftEntity.position = engine.getPiTailPosition(engine.rightEntity);
+      engine.update(1 / 60);
+      expect(engine.rightEntity.hp).toBe(72);
+      expect(engine.piCurrentDigitIndex).toBe(1);
+
+      engine.leftEntity.position = vec2(-40, -40);
+      engine.update(1 / 60);
+      engine.leftEntity.position = engine.getPiTailPosition(engine.rightEntity);
+      engine.update(1 / 60);
+      expect(engine.rightEntity.hp).toBe(71);
+      expect(engine.piCurrentDigitIndex).toBe(2);
+      expect(engine.leftEntity.hp).toBe(50);
+    });
+
+    it('Test 3: Crossing the sector and body in [-i] deals -23 HP to π without changing i direction or touching the tail', () => {
+      const engine = setupLevel9();
+      engine.leftEntity.currentPhaseIndex = 2;
+      engine.rightEntity.sectorStartAngle = 75 * Math.PI / 180;
+      engine.leftEntity.position = engine.rightEntity.position.add(vec2(0, -40));
+      engine.leftEntity.velocity = vec2(0, 60);
+
+      for (let frame = 0; frame < 400 && engine.leftEntity.position.y < 30; frame++) {
+        engine.update(1 / 60);
+      }
+
+      expect(engine.rightEntity.hp).toBe(75 - 8 - 15);
+      expect(engine.leftEntity.hp).toBe(50);
+      expect(engine.leftEntity.velocity).toEqual(vec2(0, 60));
+    });
+
+    it('Test 4: Distance 1.5 units (15 game units) from π: i takes -15 from the sector, π takes 0 (no body overlap)', () => {
+      const engine = setupLevel9();
+      engine.leftEntity.currentPhaseIndex = 0;
+      engine.rightEntity.sectorStartAngle = 75 * Math.PI / 180;
+      engine.leftEntity.position = engine.rightEntity.position.add(vec2(0, 15));
+      engine.update(1 / 60);
+
+      expect(engine.leftEntity.hp).toBe(35);
+      expect(engine.rightEntity.hp).toBe(75);
+    });
+
+    it('Test 5: Full-circle sector announces S = ½r²θ = 4π and resets θ to π/6', () => {
+      const bus = new EventBus();
+      const formulas: string[] = [];
+      bus.on('MATH_FORMULA', (payload) => formulas.push(payload.latex));
+      const engine = new SimulationEngine(LevelRegistry.getLevel(9)!, bus);
+      engine.update(3.1);
+      engine.rightEntity.sectorAngle = 2 * Math.PI;
+      engine.rightEntity.sectorStartAngle = 75 * Math.PI / 180;
+      engine.leftEntity.position = engine.rightEntity.position.add(vec2(0, 15));
+      engine.update(1 / 60);
+
+      expect(formulas).toContain('S = \\frac{1}{2}r^2\\theta = 4\\pi');
+      expect(engine.rightEntity.sectorAngle).toBeCloseTo(Math.PI / 6, 9);
     });
   });
 });

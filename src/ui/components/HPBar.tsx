@@ -3,6 +3,8 @@ import { BaseEntity } from '../../core/entities/BaseEntity';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme/ThemeContext';
 import { globalEventBus } from '../../core/engine/EventBus';
+import { PI_SECTOR_PHASES, sectorPhaseIndex, waveLatex } from '../../core/math/SpecModel';
+import { Latex } from './Latex';
 
 interface HPBarProps {
   leftEntity: BaseEntity;
@@ -61,8 +63,40 @@ export const HPBar: React.FC<HPBarProps> = ({
   const rightMaxHp = polyHp ? polyHp.max : rightEntity.maxHp;
   const rightPercent = Math.max(0, Math.min(100, (rightHp / rightMaxHp) * 100));
 
+  const cooldownProgress = (entity: BaseEntity) =>
+    entity.cooldownMax > 0
+      ? Math.min(100, Math.max(0, ((entity.cooldownMax - entity.cooldownRemaining) / entity.cooldownMax) * 100))
+      : 100;
+
+  const cooldownBar = (entity: BaseEntity) => (
+    <div className={`w-full h-1.5 mt-1 rounded-[1px] overflow-hidden ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
+      <div
+        className="h-full bg-blue-500 transition-all duration-75 ease-linear"
+        style={{ width: `${cooldownProgress(entity)}%` }}
+      />
+    </div>
+  );
+
+  // Wave equation and its period T = 2π/b (level 7)
+  const waveBadge = (entity: BaseEntity) => (
+    <>
+      [<Latex formula={`y = ${waveLatex(entity.amplitude, entity.frequency, entity.symbol.includes('cos') ? 'cos' : 'sin')}`} />]{' '}
+      <Latex formula={`T = \\frac{2\\pi}{${entity.frequency}} = ${(2 * Math.PI / entity.frequency).toFixed(2)}\\text{s}`} />
+    </>
+  );
+
+  // Next sector angle θ (levels 8 & 9)
+  const sectorBadge = (entity: BaseEntity) => {
+    const phase = PI_SECTOR_PHASES[sectorPhaseIndex(entity.sectorAngle)];
+    return (
+      <>
+        [{t.nextSector} <Latex formula={`\\theta = ${phase.thetaLatex}`} />]
+      </>
+    );
+  };
+
   // Determine dynamic badge for right entity
-  const getRightBadge = () => {
+  const getRightBadge = (): React.ReactNode => {
     if (engineStatus === 'COUNTDOWN') return levelId === 5 ? '[READY]' : `[${t.ready}]`;
     if (rightEntity.hasStatus('BURN')) return `[${t.onFire}]`;
     if (rightEntity.isImmuneToDerivative && levelId === 2) return `[${t.blade}]`;
@@ -76,7 +110,7 @@ export const HPBar: React.FC<HPBarProps> = ({
     if (levelId === 1) {
       return isKo ? `[공 ${activeSpheresCount}개]` : `[${activeSpheresCount} ${t.spheresCount}]`;
     }
-    if (levelId === 2 || levelId === 8) {
+    if (levelId === 2) {
       return `[${t.blade}]`;
     }
     if (levelId === 5) {
@@ -84,13 +118,10 @@ export const HPBar: React.FC<HPBarProps> = ({
       return `[ y = ${rightEntity.symbol} ] ${periodStr}`;
     }
     if (levelId === 7) {
-      const ampStr = rightEntity.amplitude > 1 ? `${rightEntity.amplitude}` : '';
-      const freqStr = rightEntity.frequency > 1 ? `${rightEntity.frequency}x` : 'x';
-      const periodStr = rightEntity.frequency > 1 ? `π = 3.14s` : `2π = 6.28s`;
-      return `[y = ${ampStr}cos ${freqStr}] ${periodStr}`;
+      return waveBadge(rightEntity);
     }
     if (levelId === 8 || levelId === 9) {
-      return `[${t.nextSector} θ = ${(rightEntity.sectorAngle / Math.PI).toFixed(2)}π]`;
+      return sectorBadge(rightEntity);
     }
     if (levelId === 3 || rightEntity.symbol === 'i' || rightEntity.symbol === '-1' || rightEntity.symbol === '-i' || rightEntity.symbol === '1') {
       const phases = [
@@ -104,7 +135,7 @@ export const HPBar: React.FC<HPBarProps> = ({
     return rightEntity.isReady() ? `[${t.ready}]` : `[${t.recharging} ${Math.ceil(rightEntity.cooldownRemaining)}s]`;
   };
 
-  const getLeftBadge = () => {
+  const getLeftBadge = (): React.ReactNode => {
     if (engineStatus === 'COUNTDOWN') return levelId === 5 ? '[READY]' : `[${t.ready}]`;
     if (leftEntity.hasStatus('BURN')) return isEs ? '[¡Quemando!]' : `[${t.onFire}]`;
     if (levelId === 1) {
@@ -127,9 +158,6 @@ export const HPBar: React.FC<HPBarProps> = ({
         ? `[${t.expBlade}]`
         : `[${t.blade} ${leftEntity.cooldownRemaining.toFixed(1)}s]`;
     }
-    if (levelId === 8) {
-      return `[${t.blade}]`;
-    }
     if (levelId === 4) {
       return `[${t.partialYReady}]`;
     }
@@ -140,10 +168,7 @@ export const HPBar: React.FC<HPBarProps> = ({
       return `[Cooldown ${Math.ceil(leftEntity.cooldownRemaining)}s]`;
     }
     if (levelId === 7) {
-      const ampStr = leftEntity.amplitude > 1 ? `${leftEntity.amplitude}` : '';
-      const freqStr = leftEntity.frequency > 1 ? `${leftEntity.frequency}x` : 'x';
-      const periodStr = leftEntity.frequency > 1 ? `π = 3.14s` : `2π = 6.28s`;
-      return `[y = ${ampStr}sin ${freqStr}] ${periodStr}`;
+      return waveBadge(leftEntity);
     }
     if (levelId === 9 || leftEntity.symbol === 'i') {
       const phases = [
@@ -181,6 +206,7 @@ export const HPBar: React.FC<HPBarProps> = ({
               {leftEntity.hp} / {leftEntity.maxHp}
             </span>
           </div>
+          {levelId === 7 && cooldownBar(leftEntity)}
           <div className="text-[11px] font-bold text-[#64748B] mt-1 pl-0.5 tracking-tight">
             {getLeftBadge()}
           </div>
@@ -203,20 +229,7 @@ export const HPBar: React.FC<HPBarProps> = ({
               {rightHp} / {rightMaxHp}
             </span>
           </div>
-          {levelId === 5 && (
-            <div className={`w-full h-1.5 mt-1 rounded-[1px] overflow-hidden ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
-              <div
-                className="h-full bg-blue-500 transition-all duration-75 ease-linear"
-                style={{
-                  width: `${
-                    rightEntity.cooldownMax > 0
-                      ? Math.min(100, Math.max(0, ((rightEntity.cooldownMax - rightEntity.cooldownRemaining) / rightEntity.cooldownMax) * 100))
-                      : 100
-                  }%`,
-                }}
-              />
-            </div>
-          )}
+          {(levelId === 5 || levelId === 7) && cooldownBar(rightEntity)}
           <div className="text-[11px] font-bold text-[#64748B] mt-1 pr-0.5 tracking-tight">
             {getRightBadge()}
           </div>

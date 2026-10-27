@@ -4,14 +4,57 @@ import { Curves } from '../math/Curves';
 import { BaseEntity } from '../entities/BaseEntity';
 import { LevelDefinition } from '../levels/LevelRegistry';
 import { EventBus, globalEventBus } from './EventBus';
+import {
+  SPEC_UNIT,
+  WAVE_SPEED,
+  WAVE_DAMAGE,
+  PI_SECTOR_RADIUS,
+  PI_SECTOR_DAMAGE,
+  PI_SECTOR_COOLDOWN,
+  PI_SECTOR_SPIN,
+  PI_TAIL_GAP,
+  PI_TAIL_NODE_RADIUS,
+  PI_TAIL_SWING,
+  PI_TAIL_OMEGA,
+  PI_SECTOR_PHASES,
+  sectorPhaseIndex,
+  nextSectorAngle,
+  waveLatex,
+} from '../math/SpecModel';
 
 export type MatchStatus = 'COUNTDOWN' | 'COMBAT' | 'PAUSED' | 'VICTORY' | 'DEFEAT';
+
+/** Exponential blade strike thresholds (reglas2/nivel8.md): contact at or beyond this x offset is the steep section. */
+const EXP_BLADE_STEEP_DX = 15;
+const EXP_BLADE_FLAT_IMPACT = 4;
+const EXP_BLADE_STEEP_DAMAGE = 20;
+const EXP_BLADE_BURN_TICK = 2;
+const EXP_BLADE_BURN_INTERVAL = 0.6;
+const EXP_BLADE_BURN_DURATION = 2.5; // 4 ticks after the immediate first tick
+const WAVE_SAMPLE_STEP = 0.5;
+const LEVEL7_ORB_PERIOD = 2.0;
+const LEVEL7_MAX_ORBS = 4;
+const LEVEL7_ORB_SPAWN_RANGE = 40;
+const LEVEL9_PENETRATION_DAMAGE = 8;
+const LEVEL9_STATE_DURATION = 3.0;
+const LEVEL9_PHASE_LATEX = ['1 \\times i = i', 'i \\times i = -1', '-1 \\times i = -i', '-i \\times i = 1'];
 
 export interface ActiveLaser {
   id: string;
   ownerId: string;
   sourcePos: Vector2D;
-  curveType: 'CUBIC' | 'PARABOLA' | 'LINEAR' | 'HORIZONTAL' | 'EXPONENTIAL' | 'SINE' | 'COSINE' | 'SECTOR';
+  /** Level 7 waves: fixed origin of the trail; sourcePos is the moving guide node. */
+  originPos?: Vector2D;
+  curveType:
+    | 'CUBIC'
+    | 'PARABOLA'
+    | 'LINEAR'
+    | 'HORIZONTAL'
+    | 'EXPONENTIAL'
+    | 'SCALED_EXPONENTIAL'
+    | 'SINE'
+    | 'COSINE'
+    | 'SECTOR';
   isTelegraph: boolean;
   telegraphTime: number;
   durationRemaining: number;
@@ -56,6 +99,13 @@ export class SimulationEngine {
   level5SpawnedA2 = false;
   level6ContactCooldown = 0;
   integralWhipAngle = 0;
+  /** Internal cooldown of π's rotating sector (seconds). */
+  piSectorCooldown = 0;
+  /** Edge-trigger state: the active decimal node was touching the entity on the previous frame. */
+  piDigitContact = false;
+  /** Edge-trigger state for the intangible body overlap of level 9, previous and current frame. */
+  piBodyContactPrev = false;
+  piBodyContactNow = false;
 
   eventBus: EventBus;
   laserIdCounter = 0;
@@ -128,6 +178,20 @@ export class SimulationEngine {
       this.level6ContactCooldown = 0;
       this.integralWhipAngle = 0;
     }
+
+    if (level.id === 7) {
+      // Pre-load: both timers start at 50% of T = 2π/b (reglas2/nivel7.md §2)
+      for (const entity of [this.leftEntity, this.rightEntity]) {
+        entity.cooldownMax = 2 * Math.PI;
+        entity.cooldownRemaining = entity.cooldownMax / 2;
+      }
+      this.orbSpawnTimer = 1.0;
+    }
+
+    if (level.id === 8) {
+      this.leftEntity.cooldownMax = 3.0;
+      this.leftEntity.cooldownRemaining = 1.0;
+    }
   }
 
   update(dt: number): void {
@@ -187,6 +251,20 @@ export class SimulationEngine {
           this.integralWhipAngle = 0;
           this.subEntities = [];
         }
+        if (this.level.id === 7) {
+          // Pre-loaded cooldowns (50%) keep running from the start of combat
+          this.orbSpawnTimer = 1.0;
+        }
+        if (this.level.id === 8) {
+          this.leftEntity.cooldownMax = 3.0;
+          this.leftEntity.cooldownRemaining = 1.0;
+          this.resetPiState();
+        }
+        if (this.level.id === 9) {
+          this.leftEntity.currentPhaseIndex = 0;
+          this.imaginaryPhaseTimer = 0;
+          this.resetPiState();
+        }
         this.eventBus.emit('MATCH_START', { levelId: this.level.id });
       }
       return;
@@ -201,6 +279,9 @@ export class SimulationEngine {
   private updateCombat(dt: number): void {
     // Clean up dead sub-entities
     this.subEntities = this.subEntities.filter((e) => !e.isDead);
+
+    this.piBodyContactPrev = this.piBodyContactNow;
+    this.piBodyContactNow = false;
 
     // Cancel any lasers whose owners are dead or destroyed
     const livingIds = new Set<string>();
@@ -278,6 +359,32 @@ export class SimulationEngine {
 
     // 6. AI decision loop for the opponent - only while match is actively in COMBAT
     if (this.status === 'COMBAT') {
+      // Level 7: both waves fire automatically when their period bar completes (reglas2/nivel7.md §3.B)
+      if (this.level.id === 7) {
+        for (const shooter of [this.leftEntity, this.rightEntity]) {
+          if (!shooter.isDead && shooter.isReady()) {
+            this.fireWave(shooter);
+          }
+        }
+      }
+
+      // Level 8: player e^x Exponential Blade fires automatically (1s initial cooldown, 3s loop)
+      if (this.level.id === 8 && this.leftEntity.isReady() && !this.leftEntity.isDead) {
+        this.leftEntity.resetCooldown();
+        this.laserIdCounter++;
+        this.addLaser({
+          id: `laser_${this.laserIdCounter}_exp_curve`,
+          ownerId: this.leftEntity.id,
+          sourcePos: this.leftEntity.position.clone(),
+          curveType: 'SCALED_EXPONENTIAL',
+          isTelegraph: true,
+          telegraphTime: 1.0,
+          durationRemaining: 0.6,
+          damage: 0,
+        });
+        this.eventBus.emit('SKILL_ACTIVATED', { entityId: this.leftEntity.id, skillName: 'Exponential Blade!' });
+      }
+
       // Level 3 player Exponential Blade cycle and contact cooldown
       if (this.level.id === 3) {
         if (this.level3ContactCooldown > 0) {
@@ -398,13 +505,13 @@ export class SimulationEngine {
               this.spawnConstantSphere(cIndex);
 
               this.eventBus.emit('MATH_FORMULA', {
-                latex: `\\int e^x dx = e^x + C_{${cIndex}}`,
+                latex: `e^x + C_{${cIndex}}`,
                 position: { x: whipTip.x, y: whipTip.y },
                 color: '#F57C00',
               });
             } else {
               this.eventBus.emit('MATH_FORMULA', {
-                latex: `\\int e^x dx = e^x`,
+                latex: `e^x`,
                 position: { x: whipTip.x, y: whipTip.y },
                 color: '#F57C00',
               });
@@ -474,6 +581,40 @@ export class SimulationEngine {
   }
 
   private handleMathCollision(a: BaseEntity, b: BaseEntity): void {
+    const isMainPair = (a === this.leftEntity && b === this.rightEntity) || (b === this.leftEntity && a === this.rightEntity);
+
+    // Level 7 (sin x vs cos x) & Level 8 (e^x vs π): body contact is elastic with 0 damage and no formula change
+    if ((this.level.id === 7 || this.level.id === 8) && isMainPair) {
+      ElasticSolver.resolveCollision(a, b);
+      return;
+    }
+
+    // Level 9 (i vs π): intangible states pass through the body (-8 HP once per crossing), solid states bounce
+    if (this.level.id === 9 && isMainPair) {
+      const phase = this.leftEntity.currentPhaseIndex;
+      const intangible = phase === 0 || phase === 2;
+      if (intangible && this.status === 'COMBAT') {
+        this.piBodyContactNow = true;
+        if (!this.piBodyContactPrev) {
+          this.rightEntity.takeDamage(LEVEL9_PENETRATION_DAMAGE);
+          this.eventBus.emit('DAMAGE_DEALT', {
+            targetId: this.rightEntity.id,
+            amount: LEVEL9_PENETRATION_DAMAGE,
+            color: '#D81B60',
+            position: { x: this.rightEntity.position.x, y: this.rightEntity.position.y },
+          });
+          this.eventBus.emit('MATH_FORMULA', {
+            latex: `${phase === 0 ? 'i' : '-i'} \\text{ penetración! (-8)}`,
+            position: { x: this.rightEntity.position.x, y: this.rightEntity.position.y },
+            color: '#D81B60',
+          });
+        }
+        return;
+      }
+      ElasticSolver.resolveCollision(a, b);
+      return;
+    }
+
     // Level 3 specific collision rules (e^x vs i)
     if (this.level.id === 3 && ((a === this.leftEntity && b === this.rightEntity) || (b === this.leftEntity && a === this.rightEntity))) {
       if (this.status === 'VICTORY' || this.status === 'DEFEAT') {
@@ -547,13 +688,13 @@ export class SimulationEngine {
           this.spawnConstantSphere(cIndex);
 
           this.eventBus.emit('MATH_FORMULA', {
-            latex: `\\int e^x dx = e^x + C_{${cIndex}}`,
+            latex: `e^x + C_{${cIndex}}`,
             position: { x: collisionPos.x, y: collisionPos.y },
             color: '#F57C00',
           });
         } else {
           this.eventBus.emit('MATH_FORMULA', {
-            latex: `\\int e^x dx = e^x`,
+            latex: `e^x`,
             position: { x: collisionPos.x, y: collisionPos.y },
             color: '#F57C00',
           });
@@ -626,7 +767,6 @@ export class SimulationEngine {
       const prevDenom = factorials[k] || 1;
       const nextDenom = factorials[nextDegree] || (prevDenom * nextDegree);
 
-      const prevSymbol = k === 0 ? `C_${cNum}` : k === 1 ? `C_${cNum} x` : `\\frac{C_${cNum}}{${prevDenom}}x^${k}`;
       const nextSymbol = nextDegree === 1 ? `C_${cNum} x` : `\\frac{C_${cNum}}{${nextDenom}}x^${nextDegree}`;
       const nextName = nextDegree === 1 ? `C${cNum}x` : `C${cNum}x^${nextDegree}/${nextDenom}`;
 
@@ -634,12 +774,12 @@ export class SimulationEngine {
       node.name = nextName;
       node.radius = Math.min(9, 4.5 + nextDegree * 0.7);
 
-      let formulaLatex = `\\int ${prevSymbol} dx = ${nextSymbol}`;
+      let formulaLatex = nextSymbol;
       if (this.integralConstantCount < 10) {
         this.integralConstantCount++;
         const nextC = this.integralConstantCount;
         this.spawnConstantSphere(nextC);
-        formulaLatex = `\\int ${prevSymbol} dx = ${nextSymbol} + C_{${nextC}}`;
+        formulaLatex = `${nextSymbol} + C_{${nextC}}`;
       }
 
       // Fire Polynomic Beam passing through the node
@@ -758,8 +898,6 @@ export class SimulationEngine {
       }
       const A = enemy.amplitude || 1;
 
-      const currentExpr = enemy.symbol;
-
       const newAmpStr = A > 1 ? `${A}` : '';
       const newSignStr = (nextPhase === 2 || nextPhase === 3) ? '-' : '';
       const newTrigStr = (nextPhase === 0 || nextPhase === 2) ? 'sin' : 'cos';
@@ -775,8 +913,8 @@ export class SimulationEngine {
       else if (nextPhase === 3) enemy.color = '#FF5722';
       else enemy.color = '#7B1FA2';
 
-      const formatLatex = (str: string) => str.replace(/sin/g, '\\sin ').replace(/cos/g, '\\cos ');
-      const formulaLatex = `\\frac{d}{dx}(${formatLatex(currentExpr)}) = ${formatLatex(nextExpr)}`;
+      const formatLatex = (str: string) => str.replace(/sin\s*/g, '\\sin ').replace(/cos\s*/g, '\\cos ');
+      const formulaLatex = formatLatex(nextExpr);
 
       this.eventBus.emit('MATH_FORMULA', {
         latex: formulaLatex,
@@ -791,7 +929,7 @@ export class SimulationEngine {
       if (enemy.isImmuneToDerivative || enemy.symbol === 'eˣ') {
         this.derivativeHitCount++;
         this.eventBus.emit('MATH_FORMULA', {
-          latex: '\\frac{d}{dx}e^x = e^x \\text{ [Immune!]}',
+          latex: 'e^x',
           position: { x: enemy.position.x, y: enemy.position.y },
           color: '#D32F2F',
         });
@@ -815,19 +953,19 @@ export class SimulationEngine {
     // Level 3: Integral vs Sine / Cosine cycle
     if (player.symbol === '∫' && (enemy.symbol === 'sin x' || enemy.symbol === 'cos x' || enemy.symbol === '-cos x' || enemy.symbol === '-sin x')) {
       let nextSymbol = '-cos x';
-      let formulaLatex = '\\int \\sin x dx = -\\cos x';
+      let formulaLatex = '-\\cos x';
       if (enemy.symbol === 'sin x') {
         nextSymbol = '-cos x';
-        formulaLatex = '\\int \\sin x dx = -\\cos x';
+        formulaLatex = '-\\cos x';
       } else if (enemy.symbol === '-cos x') {
         nextSymbol = '-sin x';
-        formulaLatex = '\\int -\\cos x dx = -\\sin x';
+        formulaLatex = '-\\sin x';
       } else if (enemy.symbol === '-sin x') {
         nextSymbol = 'cos x';
-        formulaLatex = '\\int -\\sin x dx = \\cos x';
+        formulaLatex = '\\cos x';
       } else if (enemy.symbol === 'cos x') {
         nextSymbol = 'sin x';
-        formulaLatex = '\\int \\cos x dx = \\sin x';
+        formulaLatex = '\\sin x';
       }
       enemy.symbol = nextSymbol;
       enemy.takeDamage(14);
@@ -850,7 +988,7 @@ export class SimulationEngine {
       const oneShotDmg = enemy.maxHp || 80;
       enemy.takeDamage(oneShotDmg);
       this.eventBus.emit('MATH_FORMULA', {
-        latex: '\\frac{\\partial}{\\partial y} e^x = 0',
+        latex: '0',
         position: { x: collisionPos.x, y: collisionPos.y },
         color: '#00C853',
       });
@@ -860,28 +998,6 @@ export class SimulationEngine {
         isCrit: true,
         color: '#00C853',
         position: { x: enemy.position.x, y: enemy.position.y },
-      });
-      return;
-    }
-
-    // Level 8 & 9: Pi orbital digit contact
-    if (this.level.id === 8 || this.level.id === 9 || player.symbol === 'π' || enemy.symbol === 'π') {
-      const piEntity = player.symbol === 'π' ? player : enemy;
-      const target = piEntity === player ? enemy : player;
-      const digit = this.piDigits[this.piCurrentDigitIndex % this.piDigits.length];
-      this.piCurrentDigitIndex++;
-      piEntity.activeDecimalIndex = this.piCurrentDigitIndex;
-      target.takeDamage(digit);
-      this.eventBus.emit('DAMAGE_DEALT', {
-        targetId: target.id,
-        amount: digit,
-        color: '#1976D2',
-        position: { x: target.position.x, y: target.position.y },
-      });
-      this.eventBus.emit('MATH_FORMULA', {
-        latex: `\\pi \\text{ Digit: -}${digit}`,
-        position: { x: collisionPos.x, y: collisionPos.y },
-        color: '#1976D2',
       });
       return;
     }
@@ -899,7 +1015,7 @@ export class SimulationEngine {
         position: { x: target.position.x, y: target.position.y },
       });
       this.eventBus.emit('MATH_FORMULA', {
-        latex: '\\int \\delta(x)f(x)dx = f(0)',
+        latex: 'f(0)',
         position: { x: collisionPos.x, y: collisionPos.y },
         color: '#FFEA00',
       });
@@ -931,7 +1047,7 @@ export class SimulationEngine {
     });
 
     this.eventBus.emit('MATH_FORMULA', {
-      latex: `\\Delta p = ${baseDamage}`,
+      latex: '\\Delta p',
       position: { x: collisionPos.x, y: collisionPos.y },
       color: '#00ACC1',
     });
@@ -1121,27 +1237,22 @@ export class SimulationEngine {
       }
     }
 
-    // Level 3 & 9: Imaginary unit phase rotation
+    // Level 3 & 9: Imaginary unit phase rotation (every 3s; the formula shown is the transition into the new phase)
     if (this.level.id === 3 || this.level.id === 9) {
-      const imag = this.level.id === 3
-        ? this.rightEntity
-        : (this.leftEntity.id === 'imag' || this.leftEntity.symbol.includes('i'))
-        ? this.leftEntity
-        : this.rightEntity;
-      if (imag) {
+      const imag = this.level.id === 3 ? this.rightEntity : this.leftEntity;
+      if (this.status === 'COMBAT') {
         this.imaginaryPhaseTimer += dt;
-        while (this.imaginaryPhaseTimer >= 3.0) {
-          this.imaginaryPhaseTimer -= 3.0;
+        while (this.imaginaryPhaseTimer >= LEVEL9_STATE_DURATION) {
+          this.imaginaryPhaseTimer -= LEVEL9_STATE_DURATION;
           imag.currentPhaseIndex = (imag.currentPhaseIndex + 1) % 4;
           const phases = ['i (관통)', '-1 (반사)', '-i (관통+반사)', '1 (일반)'];
           const symbols = ['i', '-1', '-i', '1'];
-          const latexPhases = ['i \\times i = -1', '-1 \\times i = -i', '-i \\times i = 1', '1 \\times i = i'];
           if (this.level.id === 3) {
             imag.symbol = symbols[imag.currentPhaseIndex];
             imag.name = symbols[imag.currentPhaseIndex];
           }
           this.eventBus.emit('MATH_FORMULA', {
-            latex: latexPhases[imag.currentPhaseIndex],
+            latex: LEVEL9_PHASE_LATEX[imag.currentPhaseIndex],
             position: { x: imag.position.x, y: imag.position.y },
             color: '#D81B60',
           });
@@ -1149,6 +1260,137 @@ export class SimulationEngine {
         }
       }
     }
+
+    if (this.level.id === 8 || this.level.id === 9) {
+      this.updatePiMechanics(dt);
+    }
+  }
+
+  /** Rotation of π's sector, sector trigger by proximity and digit tail contact (reglas2/nivel8.md §3, nivel9.md §3). */
+  private updatePiMechanics(dt: number): void {
+    const pi = this.rightEntity;
+    const player = this.leftEntity;
+
+    pi.sectorStartAngle = this.normalizeAngle(pi.sectorStartAngle - PI_SECTOR_SPIN * dt);
+    pi.tailPhase += dt;
+    this.piSectorCooldown = Math.max(0, this.piSectorCooldown - dt);
+
+    if (this.status !== 'COMBAT' || pi.isDead || player.isDead) {
+      return;
+    }
+
+    if (this.piSectorCooldown <= 0 && Curves.circleIntersectsSector(
+      player.position,
+      player.radius,
+      pi.position,
+      PI_SECTOR_RADIUS,
+      pi.sectorStartAngle,
+      pi.sectorAngle
+    )) {
+      this.piSectorCooldown = PI_SECTOR_COOLDOWN;
+      this.triggerPiSectorCut(pi, player);
+    }
+
+    const tailNode = this.getPiTailPosition(pi);
+    const touchingDigit = player.position.distanceTo(tailNode) <= player.radius + PI_TAIL_NODE_RADIUS;
+    if (touchingDigit && !this.piDigitContact) {
+      this.triggerPiDigitHit(pi, player);
+    }
+    this.piDigitContact = touchingDigit;
+  }
+
+  /** True when the player is in a reflective state (-1 or -i) of level 9. */
+  isPlayerReflecting(): boolean {
+    if (this.level.id !== 9) return false;
+    const phase = this.leftEntity.currentPhaseIndex;
+    return phase === 1 || phase === 2;
+  }
+
+  private triggerPiSectorCut(pi: BaseEntity, player: BaseEntity): void {
+    const theta = pi.sectorAngle;
+    const phase = PI_SECTOR_PHASES[sectorPhaseIndex(theta)];
+    const collisionPos = player.position;
+    const reflect = this.isPlayerReflecting();
+
+    if (reflect) {
+      pi.takeDamage(PI_SECTOR_DAMAGE);
+      this.eventBus.emit('DAMAGE_DEALT', {
+        targetId: pi.id,
+        amount: PI_SECTOR_DAMAGE,
+        color: '#1976D2',
+        position: { x: pi.position.x, y: pi.position.y },
+      });
+      this.eventBus.emit('MATH_FORMULA', {
+        latex: `S = \\frac{1}{2}r^2\\theta = ${phase.areaLatex} \\;\\times(-1)\\ 15`,
+        position: { x: collisionPos.x, y: collisionPos.y },
+        color: '#1976D2',
+      });
+    } else {
+      player.takeDamage(PI_SECTOR_DAMAGE);
+      this.eventBus.emit('DAMAGE_DEALT', {
+        targetId: player.id,
+        amount: PI_SECTOR_DAMAGE,
+        color: '#1976D2',
+        position: { x: player.position.x, y: player.position.y },
+      });
+      this.eventBus.emit('MATH_FORMULA', {
+        latex: `S = \\frac{1}{2}r^2\\theta = ${phase.areaLatex}`,
+        position: { x: collisionPos.x, y: collisionPos.y },
+        color: '#1976D2',
+      });
+    }
+
+    this.eventBus.emit('SKILL_ACTIVATED', { entityId: pi.id, skillName: '¡Corte de Sector!' });
+    pi.sectorAngle = nextSectorAngle(theta);
+  }
+
+  private triggerPiDigitHit(pi: BaseEntity, player: BaseEntity): void {
+    const digit = this.piDigits[this.piCurrentDigitIndex % this.piDigits.length];
+    this.piCurrentDigitIndex++;
+    pi.activeDecimalIndex = this.piCurrentDigitIndex;
+
+    const reflect = this.isPlayerReflecting();
+    const target = reflect ? pi : player;
+    target.takeDamage(digit);
+    this.eventBus.emit('DAMAGE_DEALT', {
+      targetId: target.id,
+      amount: digit,
+      color: '#1976D2',
+      position: { x: target.position.x, y: target.position.y },
+    });
+    this.eventBus.emit('MATH_FORMULA', {
+      latex: reflect ? `\\times(-1)\\ ${digit}` : `\\pi \\text{ Digit: -}${digit}`,
+      position: { x: player.position.x, y: player.position.y },
+      color: '#1976D2',
+    });
+  }
+
+  /** Position of the active decimal node (the one closest to π's body). */
+  getPiTailPosition(pi: BaseEntity): Vector2D {
+    const angle = this.getPiTailAngle(pi);
+    const distance = pi.radius + PI_TAIL_GAP;
+    return pi.position.add(vec2(Math.cos(angle), Math.sin(angle)).scale(distance));
+  }
+
+  /** Tail direction in game radians: hangs at 180° and oscillates around it. */
+  getPiTailAngle(pi: BaseEntity): number {
+    return Math.PI + PI_TAIL_SWING * Math.sin(PI_TAIL_OMEGA * pi.tailPhase);
+  }
+
+  private normalizeAngle(angle: number): number {
+    const full = Math.PI * 2;
+    return ((angle % full) + full) % full;
+  }
+
+  /** Resets π's sector progression and decimal queue at the start of a match. */
+  private resetPiState(): void {
+    this.piCurrentDigitIndex = 0;
+    this.piSectorCooldown = 0;
+    this.piDigitContact = false;
+    this.piBodyContactPrev = false;
+    this.piBodyContactNow = false;
+    this.rightEntity.sectorAngle = PI_SECTOR_PHASES[0].theta;
+    this.rightEntity.activeDecimalIndex = 0;
   }
 
   private updateLasers(dt: number): void {
@@ -1161,6 +1403,10 @@ export class SimulationEngine {
         }
         if ((this.level.id === 4 || this.level.id === 6) && laser.ownerId === this.rightEntity.id) {
           laser.sourcePos = this.rightEntity.position.clone();
+        }
+        if (this.level.id === 8 && laser.ownerId === this.leftEntity.id) {
+          // The e^x curve is traced through its own centre while telegraphing
+          laser.sourcePos = this.leftEntity.position.clone();
         }
         if (laser.telegraphTime <= 0) {
           laser.isTelegraph = false; // Becomes active damaging beam
@@ -1186,11 +1432,13 @@ export class SimulationEngine {
             laser.sourcePos.y >= bounds.maxY
           ) {
             laser.durationRemaining = 0;
-            this.eventBus.emit('MATH_FORMULA', {
-              latex: '\\sim \\text{[Disipación]}',
-              position: { x: laser.sourcePos.x, y: laser.sourcePos.y },
-              color: laser.curveType === 'SINE' ? '#3F51B5' : '#D500F9',
-            });
+            if (this.level.id !== 7) {
+              this.eventBus.emit('MATH_FORMULA', {
+                latex: '\\sim \\text{[Disipación]}',
+                position: { x: laser.sourcePos.x, y: laser.sourcePos.y },
+                color: laser.curveType === 'SINE' ? '#3F51B5' : '#D500F9',
+              });
+            }
           }
         }
 
@@ -1217,6 +1465,8 @@ export class SimulationEngine {
           let hit = false;
           if (laser.curveType === 'EXPONENTIAL') {
             hit = Curves.intersectsExponential(target.position, target.radius, laser.sourcePos, -50, 50, 0.15);
+          } else if (laser.curveType === 'SCALED_EXPONENTIAL') {
+            hit = Curves.intersectsScaledExponential(target.position, target.radius, laser.sourcePos, SPEC_UNIT, -50, 50);
           } else if (laser.curveType === 'SECTOR') {
             hit = Curves.isInsideSector(
               target.position,
@@ -1234,7 +1484,9 @@ export class SimulationEngine {
           } else if (laser.curveType === 'HORIZONTAL') {
             hit = Curves.intersectsHorizontalLine(target.position, target.radius, laser.sourcePos.y, -50, 50);
           } else if (laser.curveType === 'SINE' || laser.curveType === 'COSINE') {
-            if (laser.velocity) {
+            if (laser.originPos) {
+              hit = this.waveTouchesTarget(laser, target);
+            } else if (laser.velocity) {
               const speed = laser.velocity.magnitude();
               if (speed > 0.001) {
                 const dir = laser.velocity.scale(1 / speed);
@@ -1267,6 +1519,30 @@ export class SimulationEngine {
 
           if (hit) {
             laser.hitEntityIds.push(target.id);
+
+            // Level 7: a wave deals a fixed -25 HP once per shot, regardless of its amplitude a
+            if (this.level.id === 7 && laser.originPos) {
+              const waveColor = laser.curveType === 'SINE' ? '#3F51B5' : '#D500F9';
+              target.takeDamage(WAVE_DAMAGE);
+              this.eventBus.emit('DAMAGE_DEALT', {
+                targetId: target.id,
+                amount: WAVE_DAMAGE,
+                color: waveColor,
+                position: { x: target.position.x, y: target.position.y },
+              });
+              this.eventBus.emit('MATH_FORMULA', {
+                latex: `${waveLatex(laser.amplitude || 1, laser.frequency || 1, laser.curveType === 'SINE' ? 'sin' : 'cos')} \\text{ (-${WAVE_DAMAGE})}`,
+                position: { x: target.position.x, y: target.position.y },
+                color: waveColor,
+              });
+              continue;
+            }
+
+            // Level 8: e^x blade strikes π's body (flat section: two impacts + burn; steep section: critical)
+            if (this.level.id === 8 && laser.curveType === 'SCALED_EXPONENTIAL') {
+              this.applyExponentialBlade(laser, target);
+              continue;
+            }
 
             // Level 3 specific laser damage & reflection rules
             if (this.level.id === 3) {
@@ -1463,89 +1739,219 @@ export class SimulationEngine {
     this.recalcFrozenOwners();
   }
 
-  private updateOrbs(dt: number): void {
-    if (this.level.id === 5) {
-      this.level5MatchTime += dt;
-      if (this.level5MatchTime >= 8.0 && !this.level5SpawnedB2) {
-        this.level5SpawnedB2 = true;
-        this.orbs.push({
-          id: 'orb_b2',
-          type: 'FREQUENCY_X2',
-          position: vec2(-28, -14),
-          radius: 4,
-        });
-      }
-      if (this.level5MatchTime >= 14.0 && !this.level5SpawnedA2) {
-        this.level5SpawnedA2 = true;
-        this.orbs.push({
-          id: 'orb_a2',
-          type: 'AMPLITUDE_X2',
-          position: vec2(18, 11),
-          radius: 4,
-        });
-      }
-    } else {
-      this.orbSpawnTimer -= dt;
-      if (this.orbSpawnTimer <= 0) {
-        this.orbSpawnTimer = 6.0;
-        if (this.orbs.length < 3) {
-          const type = Math.random() > 0.5 ? 'AMPLITUDE_X2' : 'FREQUENCY_X2';
-          this.orbs.push({
-            id: `orb_${Date.now()}`,
-            type,
-            position: vec2((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 100),
-            radius: 4,
-          });
-        }
+  /**
+   * Level 7: fires a straight wave along the shooter's current velocity direction (no auto-aim).
+   * The guide node travels at constant speed and leaves a sinusoidal trail a·sin(bx) behind it.
+   */
+  private fireWave(shooter: BaseEntity): void {
+    shooter.resetCooldown();
+    this.laserIdCounter++;
+
+    const speed = shooter.velocity.magnitude();
+    const direction = speed > 0.001
+      ? shooter.velocity.scale(1 / speed)
+      : vec2(shooter.team === 'LEFT' ? 1 : -1, 0);
+    const isCos = shooter.symbol.includes('cos');
+
+    this.addLaser({
+      id: `laser_${this.laserIdCounter}_wave`,
+      ownerId: shooter.id,
+      sourcePos: shooter.position.clone(),
+      originPos: shooter.position.clone(),
+      curveType: isCos ? 'COSINE' : 'SINE',
+      isTelegraph: false,
+      telegraphTime: 0,
+      durationRemaining: 30,
+      damage: WAVE_DAMAGE,
+      velocity: direction.scale(WAVE_SPEED),
+      angle: Math.atan2(direction.y, direction.x),
+      amplitude: shooter.amplitude,
+      frequency: shooter.frequency,
+    });
+    this.eventBus.emit('SKILL_ACTIVATED', { entityId: shooter.id, skillName: isCos ? '¡Onda Coseno!' : '¡Onda Seno!' });
+  }
+
+  /**
+   * Hit test for a level 7 wave: any sampled point of the trail a·sin(bx) (or the guide node) inside the target circle.
+   * The trail is expressed in arena units: displacement = a·SPEC_UNIT·sin(b·s / SPEC_UNIT) for distance s from the origin.
+   */
+  private waveTouchesTarget(laser: ActiveLaser, target: BaseEntity): boolean {
+    const origin = laser.originPos;
+    if (!origin) return false;
+
+    const travel = laser.sourcePos.sub(origin);
+    const length = travel.magnitude();
+    const direction = length > 0.001 ? travel.scale(1 / length) : (laser.velocity ? laser.velocity.normalize() : vec2(1, 0));
+    const normal = vec2(-direction.y, direction.x);
+    const amplitude = (laser.amplitude || 1) * SPEC_UNIT;
+    const frequency = laser.frequency || 1;
+    const isCos = laser.curveType === 'COSINE';
+    const steps = Math.max(1, Math.ceil(length / WAVE_SAMPLE_STEP));
+    const radiusSq = target.radius * target.radius;
+
+    for (let i = 0; i <= steps; i++) {
+      const s = (i / steps) * length;
+      const phase = (frequency * s) / SPEC_UNIT;
+      const displacement = amplitude * (isCos ? Math.cos(phase) : Math.sin(phase));
+      const point = origin.add(direction.scale(s)).add(normal.scale(displacement));
+      if (point.distanceSqTo(target.position) <= radiusSq) {
+        return true;
       }
     }
 
-    // Check entity collection of orbs - in Level 5, orbs are intangible to player (d/dx)
-    const collectors = this.level.id === 5 ? [this.rightEntity] : [this.leftEntity, this.rightEntity];
+    // The guide node is on the firing axis
+    return laser.sourcePos.distanceSqTo(target.position) <= radiusSq;
+  }
+
+  /**
+   * Level 8: the exponential blade. Flat section (x < x0 + 15): two impacts of -4 plus Burn.
+   * Steep section: a single critical hit of -20 without Burn.
+   */
+  private applyExponentialBlade(laser: ActiveLaser, target: BaseEntity): void {
+    const dx = target.position.x - laser.sourcePos.x;
+    const impactPos = { x: target.position.x, y: target.position.y };
+
+    if (dx >= EXP_BLADE_STEEP_DX) {
+      target.takeDamage(EXP_BLADE_STEEP_DAMAGE);
+      this.eventBus.emit('DAMAGE_DEALT', { targetId: target.id, amount: EXP_BLADE_STEEP_DAMAGE, isCrit: true, color: '#D32F2F', position: impactPos });
+      this.eventBus.emit('MATH_FORMULA', { latex: `e^x \\text{ (-${EXP_BLADE_STEEP_DAMAGE})}`, position: impactPos, color: '#D32F2F' });
+      return;
+    }
+
+    for (let k = 0; k < 2; k++) {
+      target.takeDamage(EXP_BLADE_FLAT_IMPACT);
+      this.eventBus.emit('DAMAGE_DEALT', { targetId: target.id, amount: EXP_BLADE_FLAT_IMPACT, color: '#D32F2F', position: impactPos });
+    }
+    this.eventBus.emit('MATH_FORMULA', { latex: `e^x \\text{ (-${EXP_BLADE_FLAT_IMPACT * 2})}`, position: impactPos, color: '#D32F2F' });
+
+    target.takeDamage(EXP_BLADE_BURN_TICK);
+    this.eventBus.emit('DAMAGE_DEALT', { targetId: target.id, amount: EXP_BLADE_BURN_TICK, color: '#FF5722', position: impactPos });
+    target.addStatus({
+      type: 'BURN',
+      durationRemaining: EXP_BLADE_BURN_DURATION,
+      tickInterval: EXP_BLADE_BURN_INTERVAL,
+      tickDamage: EXP_BLADE_BURN_TICK,
+      tickTimer: 0,
+    });
+    this.eventBus.emit('MATH_FORMULA', { latex: '\\text{Quemadura! (DoT)}', position: { x: impactPos.x, y: impactPos.y - 6 }, color: '#FF5722' });
+  }
+
+  private updateOrbs(dt: number): void {
+    if (this.level.id === 7) {
+      this.updateLevel7Orbs(dt);
+      return;
+    }
+
+    this.level5MatchTime += dt;
+    if (this.level5MatchTime >= 8.0 && !this.level5SpawnedB2) {
+      this.level5SpawnedB2 = true;
+      this.orbs.push({
+        id: 'orb_b2',
+        type: 'FREQUENCY_X2',
+        position: vec2(-28, -14),
+        radius: 4,
+      });
+    }
+    if (this.level.id === 5 && this.level5MatchTime >= 14.0 && !this.level5SpawnedA2) {
+      this.level5SpawnedA2 = true;
+      this.orbs.push({
+        id: 'orb_a2',
+        type: 'AMPLITUDE_X2',
+        position: vec2(18, 11),
+        radius: 4,
+      });
+    }
+
+    // In Level 5, orbs are intangible to player (d/dx): only the enemy collects them
     for (let o = this.orbs.length - 1; o >= 0; o--) {
       const orb = this.orbs[o];
-      for (const entity of collectors) {
-        if (entity.position.distanceTo(orb.position) <= entity.radius + orb.radius) {
-          if (orb.type === 'AMPLITUDE_X2') {
-            entity.amplitude = Math.min(16, entity.amplitude * 2);
-            this.eventBus.emit('MATH_FORMULA', {
-              latex: `a \\times 2 = ${entity.amplitude} \\text{ [Amp x2]}`,
-              position: { x: entity.position.x, y: entity.position.y },
-              color: '#FFD54F',
-            });
-          } else {
-            entity.frequency = 2;
-            if (this.level.id === 5) {
-              if (!entity.symbol.includes('2x')) {
-                entity.symbol = entity.symbol.replace('x', '2x');
-                entity.name = entity.symbol;
-              }
-              this.eventBus.emit('MATH_FORMULA', {
-                latex: `\\text{¡Mejora de período! } y = ${entity.symbol}`,
-                position: { x: entity.position.x, y: entity.position.y },
-                color: '#FFD54F',
-              });
-            } else {
-              entity.frequency = Math.min(16, entity.frequency * 2);
-              entity.cooldownMax = Math.max(0.39, (2 * Math.PI) / entity.frequency);
-              this.eventBus.emit('MATH_FORMULA', {
-                latex: `b \\times 2 = ${entity.frequency} \\text{ [Freq x2]}`,
-                position: { x: entity.position.x, y: entity.position.y },
-                color: '#FFD54F',
-              });
-            }
+      const entity = this.rightEntity;
+      if (entity.position.distanceTo(orb.position) <= entity.radius + orb.radius) {
+        if (orb.type === 'AMPLITUDE_X2') {
+          entity.amplitude = Math.min(16, entity.amplitude * 2);
+          this.eventBus.emit('MATH_FORMULA', {
+            latex: `${entity.amplitude} \\text{ [Amp x2]}`,
+            position: { x: entity.position.x, y: entity.position.y },
+            color: '#FFD54F',
+          });
+        } else {
+          entity.frequency = 2;
+          if (!entity.symbol.includes('2x')) {
+            entity.symbol = entity.symbol.replace('x', '2x');
+            entity.name = entity.symbol;
           }
-          this.eventBus.emit('ORB_COLLECTED', { entityId: entity.id, orbType: orb.type });
-          this.orbs.splice(o, 1);
-          break;
+          this.eventBus.emit('MATH_FORMULA', {
+            latex: entity.symbol.replace(/sin/g, '\\sin ').replace(/cos/g, '\\cos '),
+            position: { x: entity.position.x, y: entity.position.y },
+            color: '#FFD54F',
+          });
         }
+        this.eventBus.emit('ORB_COLLECTED', { entityId: entity.id, orbType: orb.type });
+        this.orbs.splice(o, 1);
       }
     }
   }
 
+  /**
+   * Level 7 power-up nodes (reglas2/nivel7.md §3.C): static triggers that both sin x and cos x may collect.
+   * They never bounce a ball; the collected node is consumed and the collector's equation evolves.
+   */
+  private updateLevel7Orbs(dt: number): void {
+    this.orbSpawnTimer -= dt;
+    if (this.orbSpawnTimer <= 0) {
+      this.orbSpawnTimer = LEVEL7_ORB_PERIOD;
+      if (this.orbs.length < LEVEL7_MAX_ORBS) {
+        const type = Math.random() > 0.5 ? 'AMPLITUDE_X2' : 'FREQUENCY_X2';
+        this.orbs.push({
+          id: `orb_${Date.now()}_${Math.random()}`,
+          type,
+          position: vec2(
+            (Math.random() - 0.5) * 2 * LEVEL7_ORB_SPAWN_RANGE,
+            (Math.random() - 0.5) * 2 * LEVEL7_ORB_SPAWN_RANGE
+          ),
+          radius: 4,
+        });
+      }
+    }
+
+    for (let o = this.orbs.length - 1; o >= 0; o--) {
+      const orb = this.orbs[o];
+      for (const entity of [this.leftEntity, this.rightEntity]) {
+        if (entity.isDead || entity.position.distanceTo(orb.position) > entity.radius + orb.radius) {
+          continue;
+        }
+
+        if (orb.type === 'AMPLITUDE_X2') {
+          // a_nuevo = a_actual × 2 (no change to T)
+          entity.amplitude *= 2;
+        } else {
+          // b_nuevo = b_actual × 2 and T_nuevo = T_actual / 2 applied immediately to the cooldown
+          const previousMax = entity.cooldownMax;
+          entity.frequency *= 2;
+          entity.cooldownMax = (2 * Math.PI) / entity.frequency;
+          entity.cooldownRemaining *= entity.cooldownMax / previousMax;
+        }
+
+        this.eventBus.emit('MATH_FORMULA', {
+          latex: waveLatex(entity.amplitude, entity.frequency, entity.symbol.includes('cos') ? 'cos' : 'sin'),
+          position: { x: entity.position.x, y: entity.position.y },
+          color: '#FFD54F',
+        });
+        this.eventBus.emit('ORB_COLLECTED', { entityId: entity.id, orbType: orb.type });
+        this.orbs.splice(o, 1);
+        break;
+      }
+    }
+  }
+
+  /** Levels whose attacks never freeze the shooter while its projectile is active. */
+  private firingFreezesOwner(): boolean {
+    return ![3, 4, 5, 6, 7, 8, 9].includes(this.level.id);
+  }
+
   private addLaser(laser: ActiveLaser): void {
     this.activeLasers.push(laser);
-    if (this.level.id !== 3 && this.level.id !== 4 && this.level.id !== 5 && this.level.id !== 6) {
+    if (this.firingFreezesOwner()) {
       this.frozenOwnerIds.add(laser.ownerId);
     }
     // In Level 6, constant nodes freeze when firing their polynomial beam!
@@ -1571,8 +1977,8 @@ export class SimulationEngine {
   }
 
   private triggerEnemyAttack(): void {
-    if (this.level.id === 3 || this.level.id === 4 || this.level.id === 5 || this.level.id === 6) {
-      // In Level 3, 4, 5 & 6, custom mechanics handle enemy attacks
+    if ([3, 4, 5, 6, 7, 8, 9].includes(this.level.id)) {
+      // In Levels 3 to 9, custom mechanics handle enemy attacks
       return;
     }
 
@@ -1909,7 +2315,7 @@ export class SimulationEngine {
   private recalcFrozenOwners(): void {
     this.frozenOwnerIds.clear();
     for (const laser of this.activeLasers) {
-      if (this.level.id !== 3 && this.level.id !== 4 && this.level.id !== 5 && this.level.id !== 6) {
+      if (this.firingFreezesOwner()) {
         this.frozenOwnerIds.add(laser.ownerId);
       }
       // In Level 6, constant nodes freeze when firing their polynomial beam!
